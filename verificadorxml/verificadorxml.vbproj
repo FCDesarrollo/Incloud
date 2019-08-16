@@ -84,6 +84,7 @@
     <Import Include="System.Threading.Tasks" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Clases\CLEmpresa.vb" />
     <Compile Include="Clases\CLMovXml.vb" />
     <Compile Include="Clases\CLXml.vb" />
     <Compile Include="Clases\NumaLet.vb" />
