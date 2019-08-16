@@ -11,10 +11,19 @@ Module modGeneral
 
     Public DConexionesConten As Dictionary(Of String, SqlConnection)
 
+    ''VARIABLES DE CONEXION PARA LOS CAMBIOS DE POLIZAS
+    Public PConexionesPol As Dictionary(Of String, SqlConnection)
+    'Public PConexionesMovPol As Dictionary(Of String, SqlConnection)
+    'Public PConexionesDevo As Dictionary(Of String, SqlConnection)
+    'Public PConexionesCausa As Dictionary(Of String, SqlConnection)
+    'Public PConexionesAsoc As Dictionary(Of String, SqlConnection)
+
+
     Public letr As NumaLet
     Public esBoton As Boolean = False
     Public ferror As Long
     Public FC_Con As New SqlConnection
+    Public FC_ConGuid As New SqlConnection
 
     Private Rs As SqlDataReader
     Private ComRs As SqlCommand
@@ -77,6 +86,24 @@ Module modGeneral
 ERR_CON:
         MsgBox(Err.Description)
         FC_Conexion = Err.Number
+    End Function
+
+    Public Function FC_ConexionGUID(ByVal BaseGuid As String) As Long
+        Dim conData() As String
+        On Error GoTo ERR_CON
+
+        If FC_ConGuid.State = ConnectionState.Open Then FC_ConGuid.Close()
+        conData = FC_GetDatos()
+        FC_ConGuid = New SqlConnection()
+        FC_ConGuid.ConnectionString = "Data Source=" + conData(0) + " ;" &
+                         "Initial Catalog=" + BaseGuid + ";" &
+                         "User Id=" + conData(1) + ";Password=" + conData(2) + ";MultipleActiveResultSets=True"
+        FC_ConGuid.Open()
+        FC_ConexionGUID = 0
+        Exit Function
+ERR_CON:
+        MsgBox(Err.Description)
+        FC_ConexionGUID = Err.Number
     End Function
 
     Public Function GetDate(ByVal dateString As String) As String

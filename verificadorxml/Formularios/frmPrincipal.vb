@@ -8,9 +8,25 @@ Public Class frmprincipal
     Public Event OnNewHome As NewHome
     Public Event OnNewHome2 As NewHome
 
+    ''EVENTOS POLIZAS
+    Public Event OnNewHomePol As NewHome
+    Public Event OnNewHomeMovPol As NewHome
+    Public Event OnNewHomeDevo As NewHome
+    Public Event OnNewHomeCausa As NewHome
+    Public Event OnNewHomeAsoc As NewHome
+
+
     Private sload As Boolean = True
     Private DSQLDepende As Dictionary(Of String, SqlDependency)
     Private DSQLDepende2 As Dictionary(Of String, SqlDependency)
+
+    ''DEPENDENCIAS PARA POLIZAS
+    Private DSQLDependePol As Dictionary(Of String, SqlDependency)
+    Private DSQLDependeMovPol As Dictionary(Of String, SqlDependency)
+    Private DSQLDependeDevo As Dictionary(Of String, SqlDependency)
+    Private DSQLDependeCausa As Dictionary(Of String, SqlDependency)
+    Private DSQLDependeAsoc As Dictionary(Of String, SqlDependency)
+
     Public Sub CargaConexiones()
 
         ' Esta llamada es exigida por el diseñador.
@@ -32,11 +48,13 @@ Public Class frmprincipal
         Dim baseXml As String, baseConten As String
         Dim conData() As String
         conData = FC_GetDatos()
+
         DConexionesXML = New Dictionary(Of String, SqlConnection)
         DConexionesCFDI = New Dictionary(Of String, SqlConnection)
         DConexionesConten = New Dictionary(Of String, SqlConnection)
 
-        cQue = "SELECT  id,NomEmpresa,BDDCon FROM EEFEmpresas WHERE FechaAutomatic IS NOT NULL"
+        cQue = "SELECT  id,NomEmpresa,BDDCon FROM EEFEmpresas INNER JOIN EEFPlantillaDoc
+                        ON EEFEmpresas.id=EEFPlantillaDoc.idempresa WHERE FechaAutomatic IS NOT NULL AND tipo='FACTURA' AND activo=1"
         Using eCom = New SqlCommand(cQue, FC_Con)
             Using rsTras = eCom.ExecuteReader()
                 Do While rsTras.Read()
@@ -99,15 +117,59 @@ Public Class frmprincipal
                                 End If
 
                                 baseConten = "document_" & dRs("GuidDSL") & "_content"
-                                    m_connect = "Data Source=" & conData(0) & ";Initial Catalog=" & baseConten & ";User Id=" & conData(1) & ";Password=" & conData(2) & ";MultipleActiveResultSets=True"
-                                    DConexionesConten.Add(rsTras("NomEmpresa"), New SqlConnection)
-                                    DConexionesConten(rsTras("NomEmpresa")).ConnectionString = m_connect
-                                    DConexionesConten(rsTras("NomEmpresa")).Open()
-                                    SqlDependency.Stop(m_connect)
-                                    SqlDependency.Start(m_connect)
-                                End If
+                                m_connect = "Data Source=" & conData(0) & ";Initial Catalog=" & baseConten & ";User Id=" & conData(1) & ";Password=" & conData(2) & ";MultipleActiveResultSets=True"
+                                DConexionesConten.Add(rsTras("NomEmpresa"), New SqlConnection)
+                                DConexionesConten(rsTras("NomEmpresa")).ConnectionString = m_connect
+                                DConexionesConten(rsTras("NomEmpresa")).Open()
+                                SqlDependency.Stop(m_connect)
+                                SqlDependency.Start(m_connect)
+                            End If
                         End Using
                     End Using
+                Loop
+            End Using
+        End Using
+
+
+        ''PARA LAS POLIZAS
+        PConexionesPol = New Dictionary(Of String, SqlConnection)
+        'PConexionesMovPol = New Dictionary(Of String, SqlConnection)
+        'PConexionesCausa = New Dictionary(Of String, SqlConnection)
+        'PConexionesDevo = New Dictionary(Of String, SqlConnection)
+        'PConexionesAsoc = New Dictionary(Of String, SqlConnection)
+
+        cQue = "SELECT  id,NomEmpresa,BDDCon FROM EEFEmpresas INNER JOIN EEFPlantillaDoc
+                        ON EEFEmpresas.id=EEFPlantillaDoc.idempresa WHERE FechaAutomatic IS NOT NULL AND tipo='POLIZA' AND activo=1"
+
+        Using eCom = New SqlCommand(cQue, FC_Con)
+            Using rsTras = eCom.ExecuteReader()
+                Do While rsTras.Read()
+                    DConexiones("CON").ChangeDatabase(rsTras("BDDCon"))
+
+                    If BaseConSeguimiento(rsTras("BDDCon")) = False Then
+                        cQue = "ALTER DATABASE " & rsTras("BDDCon") &
+                           " SET CHANGE_TRACKING = ON
+                            (CHANGE_RETENTION = 7 DAYS, AUTO_CLEANUP = ON)"
+                        Using cCom = New SqlCommand(cQue, DConexiones("CON"))
+                            cCom.ExecuteNonQuery()
+                        End Using
+                    End If
+
+                    If TablaConSeguimiento("Polizas", DConexiones("CON")) = False Then
+                        cQue = "ALTER TABLE Polizas
+                                        ENABLE CHANGE_TRACKING
+                                        WITH (TRACK_COLUMNS_UPDATED = ON)"
+                        Using cCom = New SqlCommand(cQue, DConexiones("CON"))
+                            cCom.ExecuteNonQuery()
+                        End Using
+                    End If
+
+                    m_connect = "Data Source=" & conData(0) & ";Initial Catalog=" & rsTras("BDDCon") & ";User Id=" & conData(1) & ";Password=" & conData(2) & ";MultipleActiveResultSets=True"
+                    PConexionesPol.Add(rsTras("NomEmpresa"), New SqlConnection)
+                    PConexionesPol(rsTras("NomEmpresa")).ConnectionString = m_connect
+                    PConexionesPol(rsTras("NomEmpresa")).Open()
+                    SqlDependency.Stop(m_connect)
+                    SqlDependency.Start(m_connect)
                 Loop
             End Using
         End Using
@@ -117,11 +179,21 @@ Public Class frmprincipal
         letr = New NumaLet
         letr.ApocoparUnoParteEntera = True
         CargaConexiones()
+
         AddHandler OnNewHome, New NewHome(AddressOf Form1_OnNewHome)
         AddHandler OnNewHome2, New NewHome(AddressOf Form1_OnNewHome2)
+
+        ''PARA LAS POLIZAS
+        AddHandler OnNewHomePol, New NewHome(AddressOf Form1_OnNewHomePol)
+        'AddHandler OnNewHomeMovPol, New NewHome(AddressOf Form1_OnNewHome2)
+        'AddHandler OnNewHomeDevo, New NewHome(AddressOf Form1_OnNewHome)
+        'AddHandler OnNewHomeCausa, New NewHome(AddressOf Form1_OnNewHome2)
+        'AddHandler OnNewHomeAsoc, New NewHome(AddressOf Form1_OnNewHome)
+
         sload = True
         LoadData()
         LoadCFDI()
+        LoadPoliza()
         sload = False
     End Sub
 
@@ -134,6 +206,61 @@ Public Class frmprincipal
             Return
         End If
         LoadData()
+    End Sub
+
+    Public Sub Form1_OnNewHomePol()
+        Dim i As ISynchronizeInvoke = CType(Me, ISynchronizeInvoke)
+
+        If i.InvokeRequired Then
+            Dim dd As NewHome = New NewHome(AddressOf Form1_OnNewHomePol)
+            i.BeginInvoke(dd, Nothing)
+            Return
+        End If
+        LoadPoliza()
+    End Sub
+
+    Public Sub Form1_OnNewHomeDevoPol()
+        Dim i As ISynchronizeInvoke = CType(Me, ISynchronizeInvoke)
+
+        If i.InvokeRequired Then
+            Dim dd As NewHome = New NewHome(AddressOf Form1_OnNewHomeDevoPol)
+            i.BeginInvoke(dd, Nothing)
+            Return
+        End If
+        ''FALTA
+    End Sub
+
+    Public Sub Form1_OnNewHomeCausaPol()
+        Dim i As ISynchronizeInvoke = CType(Me, ISynchronizeInvoke)
+
+        If i.InvokeRequired Then
+            Dim dd As NewHome = New NewHome(AddressOf Form1_OnNewHomeCausaPol)
+            i.BeginInvoke(dd, Nothing)
+            Return
+        End If
+        ''FALTA
+    End Sub
+
+    Public Sub Form1_OnNewHomeAsocPol()
+        Dim i As ISynchronizeInvoke = CType(Me, ISynchronizeInvoke)
+
+        If i.InvokeRequired Then
+            Dim dd As NewHome = New NewHome(AddressOf Form1_OnNewHomeAsocPol)
+            i.BeginInvoke(dd, Nothing)
+            Return
+        End If
+        ''FALTA
+    End Sub
+
+    Public Sub Form1_OnNewHomeMovPol()
+        Dim i As ISynchronizeInvoke = CType(Me, ISynchronizeInvoke)
+
+        If i.InvokeRequired Then
+            Dim dd As NewHome = New NewHome(AddressOf Form1_OnNewHomeMovPol)
+            i.BeginInvoke(dd, Nothing)
+            Return
+        End If
+        ''FALTA
     End Sub
 
     Public Sub Form1_OnNewHome2()
@@ -260,6 +387,61 @@ Public Class frmprincipal
         End If
     End Sub
 
+    Public Sub LoadPoliza()
+        Dim dtshow As DataTable = New DataTable()
+        Dim dtshow2 As DataTable = New DataTable()
+        Dim dt As DataTable = New DataTable()
+        Dim DDtable As Dictionary(Of String, DataTable)
+        Dim t As Integer, nomCon As String, sQuery As String
+
+        Dim DSQLCommand As Dictionary(Of String, SqlCommand)
+        Dim DSQLCommandNoti As Dictionary(Of String, SqlCommand)
+
+
+        DSQLCommand = New Dictionary(Of String, SqlCommand)
+        DSQLCommandNoti = New Dictionary(Of String, SqlCommand)
+
+        DSQLDependePol = New Dictionary(Of String, SqlDependency)
+
+        DDtable = New Dictionary(Of String, DataTable)
+
+        For t = 0 To PConexionesPol.Count - 1
+            nomCon = PConexionesPol.Keys(t)
+
+            If PConexionesPol(nomCon).State = ConnectionState.Closed Then
+                PConexionesPol(nomCon).Open()
+            End If
+
+            sQuery = "SELECT id FROM dbo.Polizas"
+            DSQLCommandNoti(nomCon) = New SqlCommand(sQuery, PConexionesPol(nomCon))
+
+            DSQLCommandNoti(nomCon).Notification = Nothing
+
+            DSQLDependePol(nomCon) = New SqlDependency(DSQLCommandNoti(nomCon))
+
+            DDtable(nomCon) = New DataTable
+
+
+            DDtable(nomCon).Load(DSQLCommandNoti(nomCon).ExecuteReader(CommandBehavior.CloseConnection))
+
+
+            AddHandler DSQLDependePol(nomCon).OnChange, AddressOf de_OnChangePol
+
+        Next
+
+
+        For t = 0 To PConexionesPol.Count - 1
+            nomCon = PConexionesPol.Keys(t)
+
+            If PConexionesPol(nomCon).State = ConnectionState.Closed Then
+                PConexionesPol(nomCon).Open()
+            End If
+        Next
+
+        If sload = False Then
+            CreaPoliza("", "POLIZA", "Polizas", True)
+        End If
+    End Sub
     Public Sub de_OnChange(sender As Object, e As SqlNotificationEventArgs)
         Dim nomCon As String
         Dim dependency As SqlDependency = CType(sender, SqlDependency)
@@ -285,6 +467,20 @@ Public Class frmprincipal
 
         If dependency IsNot Nothing AndAlso dependency.HasChanges Then
             RaiseEvent OnNewHome2()
+        End If
+    End Sub
+
+    Public Sub de_OnChangePol(sender As Object, e As SqlNotificationEventArgs)
+        Dim nomCon As String
+        Dim dependency As SqlDependency = CType(sender, SqlDependency)
+
+        For t = 0 To PConexionesPol.Count - 1
+            nomCon = PConexionesPol.Keys(t)
+            RemoveHandler DSQLDependePol(nomCon).OnChange, AddressOf de_OnChangePol
+        Next
+
+        If dependency IsNot Nothing AndAlso dependency.HasChanges Then
+            RaiseEvent OnNewHomePol()
         End If
     End Sub
 

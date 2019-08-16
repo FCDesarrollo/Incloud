@@ -33,14 +33,21 @@ Public Class frmProcesar
     Private Sub BtnProcesar_Click(sender As Object, e As EventArgs) Handles btnProcesar.Click
         If cbEmpresas.Text <> "" Then
             esBoton = True
-            If ckFactura.Checked = True Then
-                CreaXML(cbEmpresas.Text, False, DTInic.Value.Date, DTFin.Value.Date)
-                CreaExpediente(cbEmpresas.Text, False, DTInic.Value.Date, DTFin.Value.Date)
+            If (ckFactura.Checked = True Or CKPoliza.Checked = True) Then
+                If ckFactura.Checked = True Then
+                    CreaXML(cbEmpresas.Text, False, DTInic.Value.Date, DTFin.Value.Date)
+                    CreaExpediente(cbEmpresas.Text, False, DTInic.Value.Date, DTFin.Value.Date)
+                End If
+                If CKPoliza.Checked = True Then
+                    CreaPoliza(cbEmpresas.Text, "POLIZA", "Polizas", False, DTInic.Value.Date, DTFin.Value.Date)
+                End If
+                esBoton = False
+                MsgBox("Se ha Procesado Correctamente.", vbInformation, "Validación")
+            Else
+                MsgBox("No ha seleccionado ningun proceso.", vbInformation, "Validación")
             End If
-            esBoton = False
-            MsgBox("Se ha Procesado Correctamente.", vbInformation, "Validación")
         Else
-            MsgBox("Seleccione la Empresa para procesar.", vbInformation, "Validación")
+                MsgBox("Seleccione la Empresa para procesar.", vbInformation, "Validación")
         End If
     End Sub
 End Class

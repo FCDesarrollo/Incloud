@@ -1,7 +1,10 @@
 ﻿Imports System.Data.SqlClient
+Imports System.IO
+Imports iTextSharp.text
+Imports iTextSharp.text.pdf
 Imports ZXing
 Module modImprimeXML
-    Public cgXML As New Collection
+
     Public Const tFactura As String = "FACTURA"
     Public Const tPoliza As String = "POLIZA"
     Private Enum iColEnc
@@ -367,7 +370,6 @@ Module modImprimeXML
 
         If System.IO.File.Exists(Fname) Then
             Try
-
                 appXL = New Microsoft.Office.Interop.Excel.Application
                 appXL.Visible = False
                 wbXl = appXL.Workbooks.Open(Fname)
@@ -475,4 +477,435 @@ Module modImprimeXML
         End Using
     End Function
 
+    Public Function ImprimePoliza(ByVal cEmpresa As String, ByVal iIDPoliza As Integer,
+                                  ByVal nomPlantilla As String, ByVal FechaI As Date,
+                                  FechaF As Date, claEmpresa As CLEmpresa) As String
+        Dim cQue As String, movQue As String, nomArchivo As String, f As Integer
+        Dim appXL As Microsoft.Office.Interop.Excel.Application = Nothing
+        Dim wbXl As Microsoft.Office.Interop.Excel.Workbook = Nothing
+        Dim shXL As Microsoft.Office.Interop.Excel.Worksheet = Nothing
+        ImprimePoliza = ""
+
+        Dim tCargo As Double, tAbono As Double, Moneda As String, GuidPoliza As String
+        Dim ImpIva, ImpBase, IvaRet, ISRRet, IEPS, OtrosImp, GranTotal, IVApagna As Double
+        Dim sEntroRecord As Boolean, cfQue As String, sHasAsoc As Boolean
+        Dim ListaArchivos As New List(Of String)
+        Dim tImporteTotal, tImporteBase, tImporteIVA, tImporteNoAcred As Double
+        If Not System.IO.Directory.Exists(FC_RutaModulos & "\POLIZAS\" & cEmpresa) Then
+            Exit Function
+        End If
+
+        Try
+            cQue = "SELECT p.Id ,p.Fecha, p.TipoPol, tp.Nombre, p.Folio, p.Concepto, p.Guid 
+                    FROM Polizas p INNER JOIN TiposPolizas tp ON p.TipoPol = tp.Codigo
+                    WHERE p.id=@idpol"
+            Using mcom = New SqlCommand(cQue, PConexionesPol(cEmpresa))
+                mcom.Parameters.AddWithValue("@idpol", iIDPoliza)
+                Using mCr = mcom.ExecuteReader()
+                    mCr.Read()
+                    If mCr.HasRows Then
+                        nomArchivo = FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & mCr("Guid") & ".pdf"
+
+                        GuidPoliza = mCr("Guid")
+
+                        appXL = New Microsoft.Office.Interop.Excel.Application
+                        appXL.Visible = False
+                        wbXl = appXL.Workbooks.Open(FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & nomPlantilla)
+                        shXL = wbXl.ActiveSheet
+
+                        With shXL
+                            ''ENCABEZADO DOCUMENTO
+                            .Cells(1, 1).value = UCase(claEmpresa.CNomEmpresa)
+                            .Cells(2, 1).value = "Impreso de póliza del " & Mid(FechaI.ToString, 1, 10) & " al " & Mid(FechaF.ToString, 1, 10)
+                            .Cells(4, 2).value = IIf(Trim(claEmpresa.CDireccion) <> "", Trim(claEmpresa.CDireccion), "0")
+                            .Cells(5, 2).value = IIf(claEmpresa.CRFCEmpresa <> "", Trim(claEmpresa.CRFCEmpresa), "")
+                            .Cells(5, 9).value = IIf(claEmpresa.CRegCamara <> "", Trim(claEmpresa.CRegCamara), "")
+                            .Cells(5, 15).value = IIf(claEmpresa.CRegEstatal <> "", Trim(claEmpresa.CRegEstatal), "")
+                            .Cells(4, 19).value = IIf(claEmpresa.CCodigoPostal <> "", Trim(claEmpresa.CCodigoPostal), "0")
+
+                            ''ENCABEZADO POLIZA
+                            .Cells(8, 1).value = IIf(mCr("Fecha").ToString <> "", Mid(mCr("Fecha").ToString, 1, 10), "")
+                            .Cells(8, 3).value = IIf(mCr("Nombre") <> "", Trim(mCr("Nombre")), "")
+                            .Cells(8, 5).value = IIf(mCr("Folio").ToString <> "", Trim(mCr("Folio").ToString), "")
+                            .Cells(8, 6).value = IIf(mCr("Concepto") <> "", Trim(mCr("Concepto")), "")
+
+                            ''MOVIMIENTOS DE LA POLIZA
+                            f = 9
+                            movQue = "SELECT mp.TipoMovto, mp.Referencia, mp.Concepto, mp.Importe, c.Nombre, c.Codigo, c.IdMoneda, m.Nombre AS Moneda 
+                                        FROM MovimientosPoliza mp 
+                                        INNER JOIN Cuentas c On c.Id = mp.IdCuenta 
+                                        INNER JOIN Monedas m On c.IdMoneda = m.Id 
+                                        WHERE mp.IdPoliza =@idpol"
+                            Using movCom = New SqlCommand(movQue, PConexionesPol(cEmpresa))
+                                movCom.Parameters.AddWithValue("@idpol", iIDPoliza)
+                                Using movCR = movCom.ExecuteReader()
+                                    Do While movCR.Read()
+                                        .Cells(f, 2).value = IIf(movCR("Referencia") <> "", "'" & Trim(movCR("Referencia")), "")
+                                        .Cells(f, 4).value = IIf(movCR("Codigo") <> "", "'" & Trim(movCR("Codigo")), "")
+                                        .Cells(f, 7).value = IIf(movCR("Nombre") <> "", Trim(movCR("Nombre")) & " - " & Trim(movCR("Concepto")), "")
+
+                                        If movCR("TipoMovto") = 0 Then
+                                            .Cells(f, 18).value = movCR("Importe")
+                                            .Cells(f, 18).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlLeft
+                                            tCargo = tCargo + movCR("Importe")
+                                        Else
+                                            .Cells(f, 19).value = movCR("Importe")
+                                            tAbono = tAbono + movCR("Importe")
+                                        End If
+                                        Moneda = movCR("Moneda")
+                                        f = f + 1
+                                        .Rows(f).Insert()
+                                    Loop
+                                End Using
+                            End Using
+
+                            f = f + 1
+                            .Rows(f).Insert()
+                            .Cells(3, 1).value = "Moneda: " & Moneda
+                            .Cells(f, 17).value = "Total póliza"
+                            .Cells(f, 18).value = tCargo
+                            .Cells(f, 19).value = tAbono
+                            f = f + 1
+                            .Rows(f).Insert()
+                            f = f + 3
+                            ''INFORMACION PARA LA DIOT
+                            sEntroRecord = False
+                            movQue = "SELECT IdPoliza, IdProveedor, ImpTotal, PorIVA, ImpBase, ImpIVA, CausaIVA, OtrosImptos, 
+                                      IVARetenido, ISRRetenido, GranTotal, EjercicioAsignado, PeriodoAsignado, IdCuenta, IVAPagNoAcred, IEPS 
+                                        FROM DevolucionesIVA WHERE IdPoliza =@idpol"
+                            Using movCom = New SqlCommand(movQue, PConexionesPol(cEmpresa))
+                                movCom.Parameters.AddWithValue("@idpol", iIDPoliza)
+                                Using movCR = movCom.ExecuteReader() ''CAUSACION IVA
+                                    ImpIva = 0 : ImpBase = 0 : IvaRet = 0 : ISRRet = 0 : IEPS = 0 : OtrosImp = 0 : GranTotal = 0 : IVApagna = 0
+                                    Do While movCR.Read()
+                                        sEntroRecord = True
+                                        ImpBase = ImpBase + movCR("ImpBase")
+                                        ImpIva = ImpIva + movCR("ImpIVA")
+                                        IvaRet = IvaRet + movCR("IVARetenido")
+                                        ISRRet = ISRRet + movCR("ISRRetenido")
+                                        IEPS = IEPS + movCR("IEPS")
+                                        OtrosImp = OtrosImp + movCR("OtrosImptos")
+                                        GranTotal = GranTotal + movCR("GranTotal")
+                                        IVApagna = IVApagna + movCR("IVAPagNoAcred")
+                                        .Cells(f, 1).Value = movCR("IdProveedor")
+                                        .Cells(f, 1).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlLeft
+
+                                        .Cells(f, 2).Value = IIf(movCR("PorIva") = 0, .Cells(f, 2).Value, movCR("PorIva") & "%")
+                                        .Cells(f, 2).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
+
+                                        .Cells(f, 3).Value = movCR("ImpBase")
+                                        .Cells(f, 3).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
+
+                                        .Cells(f, 5).Value = movCR("ImpIVA")
+                                        .Cells(f, 5).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
+
+                                        .Cells(f, 7).Value = movCR("IVARetenido")
+                                        .Cells(f, 7).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
+
+                                        .Cells(f, 9).Value = movCR("ISRRetenido")
+                                        .Cells(f, 9).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
+
+                                        .Cells(f, 11).Value = movCR("IEPS")
+                                        .Cells(f, 11).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
+
+                                        .Cells(f, 13).Value = movCR("OtrosImptos")
+                                        .Cells(f, 13).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
+
+                                        .Cells(f, 15).Value = movCR("GranTotal")
+                                        .Cells(f, 15).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
+
+                                        .Cells(f, 17).Value = movCR("IVAPagNoAcred")
+                                        .Cells(f, 17).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
+
+                                        .Cells(f, 18).Value = IIf(movCR("CausaIVA") = True, "Si", "No")
+                                        .Cells(f, 18).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
+
+                                        .Cells(f, 19).Value = movCR("EjercicioAsignado") & "-" & movCR("PeriodoAsignado")
+                                        .Cells(f, 19).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlRight
+                                        f = f + 1
+                                        .Rows(f).Insert()
+                                    Loop
+                                End Using
+                            End Using
+                            ''ELIMINA LA DIOT O LA PROVISION
+                            If sEntroRecord = False Then
+                                .Rows(f - 2).Delete()
+                                .Rows(f - 2).Delete()
+                                .Rows(f - 2).Delete()
+                                .Rows(f - 2).Delete()
+                                .Rows(f - 2).Delete()
+                                movQue = "SELECT c.IdPoliza, c.Tipo, c.TotTasa16, c.BaseTasa16, c.IVATasa16, c.IVATasa16NoAcred, c.TotTasa11, c.BaseTasa11, c.IVATasa11, c.IVATasa11NoAcred, c.TotTasa0, 
+                                            c.BaseTasa0, c.TotTasa15, c.TotTasaExento, c.BaseTasaExento, c.BaseTasa15, c.IVATasa15, c.IVATasa15NoAcred, c.TotTasa10, c.BaseTasa10, c.IVATasa10, c.IVATasa10NoAcred, c.TotOtraTasa,
+                                            c.BaseOtraTasa, c.IVAOtraTasa, c.IVARetenido, c.ISRRetenido, c.IEPS, c.TotOtros, c.IETU, con.Nombre ,c.TotTasa8, c.BaseTasa8, c.IVATasa8, c.IVATasa8NoAcred
+                                            FROM CausacionesIVA c 
+                                            LEFT JOIN ConceptosIETU con ON c.IdConceptoIETU = con.Id 
+                                            WHERE c.IdPoliza =@idpol"
+                                Using movCom = New SqlCommand(movQue, PConexionesPol(cEmpresa))
+                                    movCom.Parameters.AddWithValue("@idpol", iIDPoliza)
+                                    Using movCR = movCom.ExecuteReader()
+                                        movCR.Read()
+                                        If movCR.HasRows Then
+                                            .Cells(f, 1).Value = "IVA " & IIf(movCR("Tipo") = 1, "CAUSADO", "ACREDITABLE")
+                                            .Cells(f, 9).Value = movCR("TotTasa16")
+                                            .Cells(f, 11).Value = movCR("BaseTasa16")
+                                            .Cells(f, 13).Value = movCR("IVATasa16")
+                                            .Cells(f, 15).Value = movCR("IVATasa16NoAcred")
+
+                                            f = f + 1
+                                            .Cells(f, 9).Value = movCR("TotTasa8")
+                                            .Cells(f, 11).Value = movCR("BaseTasa8")
+                                            .Cells(f, 13).Value = movCR("IVATasa8")
+                                            .Cells(f, 15).Value = movCR("IVATasa8NoAcred")
+
+                                            f = f + 1
+                                            .Cells(f, 9).Value = movCR("TotTasa11")
+                                            .Cells(f, 11).Value = movCR("BaseTasa11")
+                                            .Cells(f, 13).Value = movCR("IVATasa11")
+                                            .Cells(f, 15).Value = movCR("IVATasa11NoAcred")
+
+                                            f = f + 1
+                                            .Cells(f, 9).Value = movCR("TotTasa0")
+                                            .Cells(f, 11).Value = movCR("BaseTasa0")
+
+                                            f = f + 1
+                                            .Cells(f, 9).Value = movCR("TotTasaExento")
+                                            .Cells(f, 11).Value = movCR("BaseTasaExento")
+
+                                            f = f + 1
+                                            .Cells(f, 9).Value = movCR("TotTasa15")
+                                            .Cells(f, 11).Value = movCR("BaseTasa15")
+                                            .Cells(f, 13).Value = movCR("IVATasa15")
+                                            .Cells(f, 15).Value = movCR("IVATasa15NoAcred")
+
+                                            f = f + 1
+                                            .Cells(f, 9).Value = movCR("TotTasa10")
+                                            .Cells(f, 11).Value = movCR("BaseTasa10")
+                                            .Cells(f, 13).Value = movCR("IVATasa10")
+                                            .Cells(f, 15).Value = movCR("IVATasa10NoAcred")
+
+                                            f = f + 1
+                                            .Cells(f, 9).Value = movCR("TotOtraTasa")
+                                            .Cells(f, 11).Value = movCR("BaseOtraTasa")
+                                            .Cells(f, 11).Value = movCR("IVAOtraTasa")
+
+                                            f = f + 1
+                                            .Cells(f, 9).Value = movCR("IVARetenido")
+                                            f = f + 1
+                                            .Cells(f, 9).Value = movCR("ISRRetenido")
+                                            f = f + 1
+                                            .Cells(f, 9).Value = movCR("IEPS")
+                                            f = f + 1
+                                            .Cells(f, 9).Value = movCR("TotOtros")
+
+                                            tImporteTotal = movCR("TotTasa16") + movCR("TotTasa8") + movCR("TotTasa11") +
+                                                            movCR("TotTasa0") + movCR("TotTasaExento") +
+                                                            movCR("BaseTasa15") + movCR("TotTasa10") +
+                                                            movCR("TotOtraTasa") + movCR("IVARetenido") +
+                                                            movCR("ISRRetenido") + movCR("IEPS") + movCR("TotOtros")
+
+                                            tImporteBase = movCR("BaseTasa16") + movCR("BaseTasa8") +
+                                                            movCR("BaseTasa11") + movCR("BaseTasa0") +
+                                                            movCR("BaseTasaExento") + movCR("BaseTasa15") +
+                                                            movCR("BaseTasa10") + movCR("BaseOtraTasa")
+
+                                            tImporteIVA = movCR("IVATasa16") + movCR("IVATasa8") +
+                                                            movCR("IVATasa11") + movCR("IVATasa15") +
+                                                            movCR("IVATasa10") + movCR("IVAOtraTasa")
+
+                                            tImporteNoAcred = movCR("IVATasa16NoAcred") + movCR("IVATasa8NoAcred") +
+                                                              movCR("IVATasa11NoAcred") + movCR("IVATasa15NoAcred") +
+                                                              movCR("IVATasa10NoAcred")
+
+
+                                            f = f + 1
+                                            .Cells(f, 9).Value = IIf(tImporteTotal <> 0, tImporteTotal, 0)
+                                            .Cells(f, 11).Value = IIf(tImporteBase <> 0, tImporteBase, 0)
+                                            .Cells(f, 13).Value = IIf(tImporteIVA <> 0, tImporteIVA, 0)
+                                            .Cells(f, 15).Value = IIf(tImporteNoAcred <> 0, tImporteNoAcred, 0)
+
+                                            f = f + 1
+                                            .Cells(f, 11).Value = movCR("IETU")
+                                            .Cells(f, 14).Value = Trim(IIf(movCR("Nombre") IsNot DBNull.Value, movCR("Nombre"), "Ninguno"))
+                                        Else
+                                            f = f - 1
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+                                            .Rows(f - 1).Delete()
+
+                                        End If
+                                    End Using
+                                End Using
+                            Else
+                                f = f + 2
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                                .Rows(f - 1).Delete()
+                            End If
+                            sHasAsoc = False
+                            ListaArchivos.Add(GuidPoliza)
+                            f = f + 2
+                            movQue = "SELECT UUID FROM AsocCFDIs WHERE GuidRef =@guidRef"
+                            Using cCom = New SqlCommand(movQue, PConexionesPol(cEmpresa))
+                                cCom.Parameters.AddWithValue("@guidRef", GuidPoliza)
+                                Using cRs = cCom.ExecuteReader()
+                                    Do While cRs.Read
+                                        cfQue = "SELECT Fecha,TipoComprobante,Serie,Folio, 
+                                                 RFCEmisor,NombreEmisor,RFCReceptor, NombreReceptor,Total
+                                                FROM Comprobante WHERE UUID=@uuid"
+                                        Using mComC = New SqlCommand(cfQue, FC_ConGuid)
+                                            mComC.Parameters.AddWithValue("@uuid", cRs("UUID"))
+                                            Using movCr = mComC.ExecuteReader()
+                                                movCr.Read()
+                                                If movCr.HasRows Then
+                                                    .Cells(f, 1).Value = Mid(movCr("Fecha").ToString, 1, 10)
+                                                    .Cells(f, 2).Value = IIf(movCr("TipoComprobante") = "I", "INGRESO", "EGRESO")
+                                                    .Cells(f, 3).Value = movCr("Serie")
+                                                    .Cells(f, 5).Value = movCr("Folio")
+                                                    .Cells(f, 5).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlLeft
+                                                    .Cells(f, 7).Value = cRs("UUID")
+                                                    .Cells(f, 13).Value = IIf(claEmpresa.CRFCEmpresa = movCr("RFCEmisor"), movCr("RFCReceptor"), movCr("RFCEmisor"))
+                                                    .Cells(f, 19).Value = movCr("Total")
+                                                    .Cells(f, 19).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
+
+                                                    If System.IO.File.Exists(FC_RutaModulos & "\ARCHIVOSXML\" & cEmpresa & "\" & cRs("UUID") & ".xlsx") Then
+                                                        ListaArchivos.Add(cRs("UUID"))
+                                                    End If
+                                                    f = f + 1
+                                                End If
+                                            End Using
+                                        End Using
+                                    Loop
+                                End Using
+                            End Using
+
+
+                            appXL.DisplayAlerts = False
+
+                            wbXl.ActiveSheet.ExportAsFixedFormat(
+                                Type:=Microsoft.Office.Interop.Excel.XlFixedFormatType.xlTypePDF,
+                                filename:=FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & GuidPoliza & "temp.pdf", Quality:=Microsoft.Office.Interop.Excel.XlFixedFormatQuality.xlQualityStandard, IncludeDocProperties:=True, IgnorePrintAreas:=False, OpenAfterPublish:=False)
+                            '        wbXl.SaveAs(FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & GuidPoliza & ".pdf", Microsoft.Office.Interop.Excel.XlFixedFormatType.xlTypePDF, Type.Missing, Type.Missing, False, False,
+                            '0, Microsoft.Office.Interop.Excel.XlSaveConflictResolution.xlLocalSessionChanges, Type.Missing, Type.Missing)
+                            wbXl.Close()
+                            wbXl = Nothing
+                            appXL.Workbooks.Close()
+
+                            UnirArchivos(ListaArchivos, FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & GuidPoliza & ".pdf", cEmpresa)
+
+                        End With
+                    End If
+                End Using
+            End Using
+        Catch ex As Exception
+            ImprimePoliza = ""
+            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ARCHIVOSXML\errores.log", Format(Date.Now, "dd/MM/yyyy HH:mm") & " - " & ex.Message & vbCrLf, True)
+        Finally
+            releaseObject(shXL)
+            releaseObject(wbXl)
+            releaseObject(appXL)
+        End Try
+
+
+    End Function
+
+    Private Sub UnirArchivos(ByVal lListaA As List(Of String),
+                             ByVal lNomfinal As String, ByVal lEmpresa As String)
+        Dim Doc As New Document()
+        Dim rutaDeAr As String, nomArc As String
+        Dim appXL As Microsoft.Office.Interop.Excel.Application = Nothing
+        Dim wbXl As Microsoft.Office.Interop.Excel.Workbook = Nothing
+
+        rutaDeAr = FC_RutaModulos & "\ARCHIVOSXML\" & lEmpresa & "\"
+
+        Try
+            appXL = New Microsoft.Office.Interop.Excel.Application
+            appXL.Visible = False
+
+            Dim fs As New FileStream(lNomfinal, FileMode.Create, FileAccess.Write, FileShare.None)
+
+            Dim copy As New PdfCopy(Doc, fs)
+
+            Doc.Open()
+
+            Dim Rd As PdfReader
+
+            Dim n As Integer 'Número de páginas de cada pdf
+
+            For Each file In lListaA
+                If n > 0 Then
+                    wbXl = appXL.Workbooks.Open(rutaDeAr & file & ".xlsx")
+                    appXL.DisplayAlerts = False
+
+                    wbXl.ActiveSheet.ExportAsFixedFormat(
+                                    Type:=Microsoft.Office.Interop.Excel.XlFixedFormatType.xlTypePDF,
+                                    filename:=FC_RutaModulos & "\POLIZAS\" & lEmpresa & "\temp.pdf", Quality:=Microsoft.Office.Interop.Excel.XlFixedFormatQuality.xlQualityStandard, IncludeDocProperties:=True, IgnorePrintAreas:=False, OpenAfterPublish:=False)
+                    wbXl.Close()
+                    wbXl = Nothing
+                    appXL.Workbooks.Close()
+                    nomArc = FC_RutaModulos & "\POLIZAS\" & lEmpresa & "\temp.pdf"
+                Else
+                    nomArc = FC_RutaModulos & "\POLIZAS\" & lEmpresa & "\" & file & "temp.pdf"
+                End If
+                Rd = New PdfReader(nomArc)
+
+                n = Rd.NumberOfPages
+
+                Dim page As Integer = 0
+
+                Do While page < n
+
+                    page += 1
+
+                    copy.AddPage(copy.GetImportedPage(Rd, page))
+
+                Loop
+
+                copy.FreeReader(Rd)
+
+                Rd.Close()
+                If System.IO.File.Exists(nomArc) Then
+                    System.IO.File.Delete(nomArc)
+                End If
+
+            Next
+
+        Catch ex As Exception
+            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ARCHIVOSXML\errores.log", Format(Date.Now, "dd/MM/yyyy HH:mm") & " - " & ex.Message & vbCrLf, True)
+        Finally
+            releaseObject(wbXl)
+            releaseObject(appXL)
+            ' Cerramos el documento
+
+            Doc.Close()
+
+        End Try
+    End Sub
 End Module
