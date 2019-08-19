@@ -1,5 +1,6 @@
 ﻿Imports System.Data.SqlClient
 Imports System.IO
+Imports Microsoft.Office.Interop
 
 Module modFuncione
     Public cgXML As New Collection
@@ -431,22 +432,22 @@ Otraempresa:
                                         End Using
                                     End If
                                 Else
-                                        'cQueryAsoc = "SELECT UUID FROM zEEFControlUUID WHERE idAsocCFDI=@idasoc"
-                                        'Using cCom = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
-                                        '    cCom.Parameters.AddWithValue("@idasoc", mRs("id"))
-                                        '    Using cr = cCom.ExecuteReader()
-                                        '        cr.Read()
-                                        '        If cr.HasRows Then
-                                        '            ImprimeExpediente(cr("UUID"), DConexionesCFDI(nomCon), nomCon)
-                                        '            cQueryAsoc = "DELETE FROM zEEFControlUUID WHERE idAsocCFDI=@idasoc"
-                                        '            Using cComD = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
-                                        '                cComD.Parameters.AddWithValue("@idasoc", mRs("id"))
-                                        '                cComD.ExecuteNonQuery()
-                                        '            End Using
-                                        '        End If
-                                        '    End Using
-                                        'End Using
-                                    End If
+                                    'cQueryAsoc = "SELECT UUID FROM zEEFControlUUID WHERE idAsocCFDI=@idasoc"
+                                    'Using cCom = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
+                                    '    cCom.Parameters.AddWithValue("@idasoc", mRs("id"))
+                                    '    Using cr = cCom.ExecuteReader()
+                                    '        cr.Read()
+                                    '        If cr.HasRows Then
+                                    '            ImprimeExpediente(cr("UUID"), DConexionesCFDI(nomCon), nomCon)
+                                    '            cQueryAsoc = "DELETE FROM zEEFControlUUID WHERE idAsocCFDI=@idasoc"
+                                    '            Using cComD = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
+                                    '                cComD.Parameters.AddWithValue("@idasoc", mRs("id"))
+                                    '                cComD.ExecuteNonQuery()
+                                    '            End Using
+                                    '        End If
+                                    '    End Using
+                                    'End Using
+                                End If
                                 cVersion = mRs("SYS_CHANGE_VERSION")
                             Loop
                         End Using
@@ -474,4 +475,12 @@ Otraempresa:
 Otraempresa:
         Next
     End Sub
+
+    Public Function getLastRow(ByRef sht As Excel.Worksheet) As Long
+        On Error GoTo Err
+        getLastRow = sht.Cells.Find("*", SearchOrder:=Excel.XlSearchOrder.xlByRows, SearchDirection:=Excel.XlSearchDirection.xlPrevious).Row
+        Exit Function
+Err:
+        If Err.Number = 91 Then getLastRow = 0
+    End Function
 End Module
