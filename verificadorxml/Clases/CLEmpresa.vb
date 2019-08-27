@@ -1,4 +1,6 @@
-﻿Public Class CLEmpresa
+﻿Imports System.Data.SqlClient
+
+Public Class CLEmpresa
     Private _cNomEmpresa As String
     Private _cIDEmpresa As Integer
     Private _cRFCEmpresa As String
@@ -79,4 +81,21 @@
             _cNomEmpresa = value
         End Set
     End Property
+
+    Public Function ObtenerNombreEmpresa(ByVal idempre As Integer)
+        Dim cQueryO As String
+        DConexiones("CON").ChangeDatabase("GeneralesSQL")
+        ObtenerNombreEmpresa = ""
+        cQueryO = "SELECT Nombre
+                          FROM ListaEmpresas WHERE Id=@ID"
+        Using cComO = New SqlCommand(cQueryO, DConexiones("CON"))
+            cComO.Parameters.AddWithValue("@ID", idempre)
+            Using cCrO = cComO.ExecuteReader()
+                cCrO.Read()
+                If cCrO.HasRows Then
+                    ObtenerNombreEmpresa = cCrO("Nombre")
+                End If
+            End Using
+        End Using
+    End Function
 End Class

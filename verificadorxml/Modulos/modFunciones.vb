@@ -341,13 +341,15 @@ Otraempresa:
                             clasEmpresa.CDireccion = Replace(cCr("Direccion"), Chr(10), "")
                             clasEmpresa.CRegCamara = cCr("RegCamara")
                             clasEmpresa.CRegEstatal = cCr("RegEstatal")
-                            clasEmpresa.CNomEmpresa = "EMPRESA PRUEBAS"
+                            clasEmpresa.CNomEmpresa = clasEmpresa.ObtenerNombreEmpresa(cCr("IdEmpresa"))
                             FC_ConexionGUID("document_" & cCr("GuidDSL") & "_metadata")
                         Else
                             Exit Sub
                         End If
                     End Using
                 End Using
+
+                DConexiones("CON").ChangeDatabase(PConexionesPol(nomCon).Database)
 
                 cQuery = "SELECT plantilla FROM EEFPlantillaDoc
                             WHERE idempresa=@idemp AND tipo=@tip"
