@@ -879,7 +879,7 @@ Module modImprimeXML
                                 End Using
                             End Using
                             f = f + 3
-                            '''IMPRIME CODIGOS DE PROVEEDORES
+                            '''IMPRIME CODIGOS DE PROVEEDORES CODIGO
                             If sEntroRecord Then
                                 .Cells(f, 1) = "CODIGO"
                                 .Cells(f, 1).Font.Bold = True
