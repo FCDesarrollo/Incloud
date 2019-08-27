@@ -6,6 +6,8 @@ Imports Microsoft.Office.Interop
 Imports ZXing
 Module modImprimeXML
 
+    Private ReadyState As Boolean
+    Private Const maxTime As Long = 20
     Public Const tFactura As String = "FACTURA"
     Public Const tPoliza As String = "POLIZA"
     Private Enum iColEnc
@@ -429,6 +431,7 @@ Module modImprimeXML
         Catch ex As Exception
             obj = Nothing
         Finally
+            GC.WaitForPendingFinalizers()
             GC.Collect()
         End Try
     End Sub
@@ -495,9 +498,12 @@ Module modImprimeXML
 
         Dim tCargo As Double, tAbono As Double, Moneda As String, GuidPoliza As String
         Dim ImpIva, ImpBase, IvaRet, ISRRet, IEPS, OtrosImp, GranTotal, IVApagna As Double
-        Dim sEntroRecord As Boolean, cfQue As String, sHasAsoc As Boolean
-        Dim ListaArchivos As New List(Of String)
+        Dim sEntroRecord As Boolean, cfQue As String
+
         Dim tImporteTotal, tImporteBase, tImporteIVA, tImporteNoAcred As Double
+
+        Dim dProveedores As New Dictionary(Of String, String)
+
         If Not System.IO.Directory.Exists(FC_RutaModulos & "\POLIZAS\" & cEmpresa) Then
             Exit Function
         End If
@@ -577,9 +583,10 @@ Module modImprimeXML
                             f = f + 3
                             ''INFORMACION PARA LA DIOT
                             sEntroRecord = False
-                            movQue = "SELECT IdPoliza, IdProveedor, ImpTotal, PorIVA, ImpBase, ImpIVA, CausaIVA, OtrosImptos, 
-                                      IVARetenido, ISRRetenido, GranTotal, EjercicioAsignado, PeriodoAsignado, IdCuenta, IVAPagNoAcred, IEPS 
-                                        FROM DevolucionesIVA WHERE IdPoliza =@idpol"
+                            movQue = "SELECT d.IdPoliza, IdProveedor, ImpTotal, PorIVA, ImpBase, ImpIVA, CausaIVA, OtrosImptos, p.nombre, p.codigo,
+                                      IVARetenido, ISRRetenido, GranTotal, EjercicioAsignado, PeriodoAsignado, d.IdCuenta, IVAPagNoAcred, IEPS 
+                                        FROM DevolucionesIVA d INNER JOIN Proveedores p ON d.IdProveedor=p.ID
+                                            WHERE IdPoliza =@idpol"
                             Using movCom = New SqlCommand(movQue, PConexionesPol(cEmpresa))
                                 movCom.Parameters.AddWithValue("@idpol", iIDPoliza)
                                 Using movCR = movCom.ExecuteReader() ''CAUSACION IVA
@@ -594,7 +601,12 @@ Module modImprimeXML
                                         OtrosImp = OtrosImp + movCR("OtrosImptos")
                                         GranTotal = GranTotal + movCR("GranTotal")
                                         IVApagna = IVApagna + movCR("IVAPagNoAcred")
-                                        .Cells(f, 1).Value = movCR("IdProveedor")
+                                        .Cells(f, 1).Value = movCR("codigo")
+
+                                        If Not dProveedores.ContainsKey(CStr(movCR("Codigo"))) Then
+                                            dProveedores.Add(CStr(movCR("Codigo")), CStr(movCR("nombre")))
+                                        End If
+
                                         .Cells(f, 1).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlLeft
 
                                         .Cells(f, 2).Value = IIf(movCR("PorIva") = 0, .Cells(f, 2).Value, movCR("PorIva") & "%")
@@ -777,8 +789,8 @@ Module modImprimeXML
                                 .Rows(f - 1).Delete()
                                 .Rows(f - 1).Delete()
                             End If
-                            sHasAsoc = False
-                            ListaArchivos.Add(GuidPoliza)
+
+
                             f = f + 2
                             n = 1
                             movQue = "SELECT UUID FROM AsocCFDIs WHERE GuidRef =@guidRef"
@@ -807,28 +819,42 @@ Module modImprimeXML
                                                     nomfac = FC_RutaModulos & "\ARCHIVOSXML\" & cEmpresa & "\" & cRs("UUID") & ".xlsx"
                                                     If System.IO.File.Exists(nomfac) Then
                                                         filAnt = f
-                                                        'f = f + 6
+
                                                         appXLFac = New Microsoft.Office.Interop.Excel.Application
                                                         appXLFac.Visible = False
                                                         wbXlFac = appXLFac.Workbooks.Open(nomfac)
                                                         shXLFac = wbXlFac.ActiveSheet
                                                         uFil = getLastRow(shXLFac)
 
+
                                                         n = n + 1
+
+                                                        appXLFac.ActiveWindow.DisplayGridlines = False
                                                         shXLFac.Range("A1:P" & CStr(uFil)).Copy()
-                                                        '.Cells(f, 1) = cRs("UUID")
-                                                        'f = f + 1
-                                                        'wbXl.ActiveSheet.Range("A" & CStr(f)).PasteSpecial
-                                                        wbXl.Sheets(n).Range("A1") = cRs("UUID")
-                                                        wbXl.Sheets(n).Range("A2").PasteSpecial
+
+                                                        f = f + 1
+                                                        With wbXl.Sheets(n).PageSetup
+                                                            .PaperSize = Excel.XlPaperSize.xlPaperLetter
+                                                            .Orientation = Excel.XlPageOrientation.xlLandscape
+                                                            .Zoom = False
+                                                            .FitToPagesTall = 1
+                                                            .FitToPagesWide = 1
+                                                            .RightMargin = 4
+                                                            .LeftMargin = 4
+                                                            .BottomMargin = 4
+                                                            .TopMargin = 9
+
+                                                            wbXl.Sheets(n).Range("A2").PasteSpecial(
+                                                                Paste:=Excel.XlPasteType.xlPasteAll, SkipBlanks:=False)
+                                                            wbXl.Sheets(n).Range("A1") = cRs("UUID")
+                                                        End With
+                                                        appXLFac.ActiveWindow.DisplayGridlines = True
+
+                                                        appXLFac.CutCopyMode = False
 
                                                         If n > 3 Then
                                                             wbXl.Worksheets.Add(After:=wbXl.Worksheets(wbXl.Worksheets.Count))
                                                         End If
-
-                                                        '.HPageBreaks.Add(.Range("A35", "A35"))
-
-                                                        'ListaArchivos.Add(cRs("UUID"))
 
                                                         .Hyperlinks.Add(Anchor:= .Range("G" & CStr(filAnt)),
                                                         Address:="", SubAddress:=wbXl.Sheets(n).Name & "!A1",
@@ -838,13 +864,12 @@ Module modImprimeXML
                                                         Address:="", SubAddress:= .Name & "!G" & CStr(filAnt),
                                                         TextToDisplay:=cRs("UUID").ToString)
 
+                                                        shXLFac = Nothing
+                                                        wbXlFac.Close(False)
+                                                        wbXlFac = Nothing
+                                                        appXLFac.Quit()
+                                                        appXLFac = Nothing
 
-                                                        '.Hyperlinks.Add(Anchor:= .Range(.Cells(f, 7), .Cells(f, 7)),
-                                                        'Address:="Hoja2", SubAddress:="#2",
-                                                        'ScreenTip:="Prueba",
-                                                        'TextToDisplay:=cRs("UUID").ToString)
-                                                        'SubAddress:=shXL.Name & "!A1",
-                                                        'Address:=FC_RutaModulos & "\ARCHIVOSXML\" & cEmpresa & "\" & cRs("UUID") & ".pdf",
                                                     End If
                                                     f = f + 1
                                                 End If
@@ -853,23 +878,36 @@ Module modImprimeXML
                                     Loop
                                 End Using
                             End Using
-
+                            f = f + 3
+                            '''IMPRIME CODIGOS DE PROVEEDORES
+                            If sEntroRecord Then
+                                .Cells(f, 1) = "CODIGO"
+                                .Cells(f, 1).Font.Bold = True
+                                .Cells(f, 3) = "PROVEEDOR"
+                                .Cells(f, 3).Font.Bold = True
+                                f = f + 1
+                                For t = 0 To dProveedores.Count - 1
+                                    .Cells(f, 1) = dProveedores.Keys(t)
+                                    .Cells(f, 3) = dProveedores.Item(dProveedores.Keys(t))
+                                    f = f + 1
+                                Next
+                            End If
                             appXL.DisplayAlerts = False
 
-                            wbXl.ExportAsFixedFormat(
-                                Type:=Microsoft.Office.Interop.Excel.XlFixedFormatType.xlTypePDF, From:=1, To:=3,
-                                Filename:=FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & GuidPoliza & "temp.pdf",
-                                Quality:=Microsoft.Office.Interop.Excel.XlFixedFormatQuality.xlQualityStandard,
-                                IncludeDocProperties:=True, IgnorePrintAreas:=False, OpenAfterPublish:=False)
-
+                            .PageSetup.RightMargin = 4
+                            .PageSetup.LeftMargin = 4
+                            .PageSetup.BottomMargin = 4
+                            .PageSetup.TopMargin = 9
                             '        wbXl.SaveAs(FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & GuidPoliza & ".xlsx", Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, False, False,
                             '0, Microsoft.Office.Interop.Excel.XlSaveConflictResolution.xlLocalSessionChanges, Type.Missing, Type.Missing)
 
-                            wbXl.Close()
-                            wbXl = Nothing
-                            appXL.Workbooks.Close()
+                            CrearPolizaPDF(appXL, FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & GuidPoliza & ".pdf")
 
-                            UnirArchivos(ListaArchivos, FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & GuidPoliza & ".pdf", cEmpresa)
+                            shXL = Nothing
+                            wbXl.Close(False)
+                            wbXl = Nothing
+                            appXL.Quit()
+                            appXL = Nothing
 
                         End With
                     End If
@@ -882,151 +920,96 @@ Module modImprimeXML
             releaseObject(shXL)
             releaseObject(wbXl)
             releaseObject(appXL)
+            releaseObject(shXLFac)
+            releaseObject(wbXlFac)
+            releaseObject(appXLFac)
+            dProveedores.Clear()
         End Try
 
 
     End Function
 
-    Private Sub UnirArchivos(ByVal lListaA As List(Of String),
-                             ByVal lNomfinal As String, ByVal lEmpresa As String)
-        Dim Doc As New Document()
-        Dim rutaDeAr As String, nomArc As String
-        Dim appXL As Microsoft.Office.Interop.Excel.Application = Nothing
-        Dim wbXl As Microsoft.Office.Interop.Excel.Workbook = Nothing
-        Dim sOne As Boolean
-        Dim PageDictionary As PdfDictionary = Nothing
-        Dim AnnotationDictionary As PdfDictionary
-        Dim Annots As PdfArray = Nothing
-        rutaDeAr = FC_RutaModulos & "\ARCHIVOSXML\" & lEmpresa & "\"
+    Private Sub CrearPolizaPDF(ByVal libro As Excel.Application, ByVal nombreFinal As String)
+        Dim pmkr2 As AdobePDFMakerForOffice.PDFMaker
+        'Set pmkr2 = Application.COMAddIns.Item(6).Object ' Assign object reference.
+        pmkr2 = Nothing
+        'libro.Visible = False
+        'libro.EnableEvents = False
+        'libro.ScreenUpdating = False
+        'libro.DisplayAlerts = False
+        'Dim app As New Application
+        For Each a In libro.COMAddIns
+            If InStr(UCase(a.Description), "PDFMAKER") > 0 Then
+                pmkr2 = a.Object
+                Exit For
+            End If
+        Next
 
-        Try
-            appXL = New Microsoft.Office.Interop.Excel.Application
-            appXL.Visible = False
+        If pmkr2 Is Nothing Then
+            MsgBox("Cannot Find PDFMaker add-in", vbOKOnly, "")
+            Exit Sub
+        End If
 
-            Dim fs As New FileStream(lNomfinal, FileMode.Create, FileAccess.Write, FileShare.None)
+        Dim pdfname As String
+        pdfname = nombreFinal
 
-            Dim copy As New PdfCopy(Doc, fs)
+        Dim stng As AdobePDFMakerForOffice.ISettings
+        pmkr2.GetCurrentConversionSettings(stng)
 
-            Doc.Open()
 
-            Dim Rd As PdfReader
+        stng.AddBookmarks = True
+        stng.AddLinks = True
+        stng.AddTags = True
+        stng.ConvertAllPages = True
+        stng.CreateFootnoteLinks = True
+        stng.CreateXrefLinks = True
+        stng.OutputPDFFileName = pdfname
+        stng.PromptForPDFFilename = False
+        stng.ShouldShowProgressDialog = False
+        stng.ViewPDFFile = False
 
-            Dim n As Integer 'Número de páginas de cada pdf
+        stng.LayoutBasedOnPrinterSettings = True
+        stng.PrintActivesheetOnly = False '' para imprimir todas las hojas
 
-            For Each file In lListaA
-                If n > 0 Then
-                    wbXl = appXL.Workbooks.Open(rutaDeAr & file & ".xlsx")
-                    appXL.DisplayAlerts = False
+        pmkr2.CreatePDFEx(stng, 0)
 
-                    wbXl.ActiveSheet.ExportAsFixedFormat(
-                                    Type:=Microsoft.Office.Interop.Excel.XlFixedFormatType.xlTypePDF,
-                                    filename:=FC_RutaModulos & "\POLIZAS\" & lEmpresa & "\temp.pdf", Quality:=Microsoft.Office.Interop.Excel.XlFixedFormatQuality.xlQualityStandard, IncludeDocProperties:=True, IgnorePrintAreas:=False, OpenAfterPublish:=False)
-                    wbXl.Close()
-                    wbXl = Nothing
-                    appXL.Workbooks.Close()
-                    nomArc = FC_RutaModulos & "\POLIZAS\" & lEmpresa & "\temp.pdf"
-                    sOne = False
-                Else
-                    nomArc = FC_RutaModulos & "\POLIZAS\" & lEmpresa & "\" & file & "temp.pdf"
-                    sOne = True
-                End If
-                Rd = New PdfReader(nomArc)
-
-                n = Rd.NumberOfPages
-
-                Dim page As Integer = 0
-
-                Do While page < n
-                    page += 1
-                    'PageDictionary = (Rd.GetPageN(page))
-
-                    'Annots = PageDictionary.GetAsArray(PdfName.LINK)
-
-                    'If Not Annots Is Nothing Then
-                    '    For Each A As PdfObject In Annots.ArrayList
-                    '        AnnotationDictionary = Rd.GetPdfObject(A)
-                    '        If AnnotationDictionary.Get(PdfName.SUBTYPE).Equals(PdfName.LINK) Then
-                    '            If Not AnnotationDictionary.Get(PdfName.A) Is DBNull.Value Then
-                    '                If AnnotationDictionary.Get(PdfName.S).Equals(PdfName.URI) Then
-                    '                    MsgBox("Hola")
-                    '                End If
-                    '            End If
-                    '        End If
-                    '        'PdfDictionary AnnotationDictionary = (PdfDictionary)PdfReader.GetPdfObject(A);
-                    '    Next
-                    'End If
-
-                    'page += 1
-
-                    copy.AddPage(copy.GetImportedPage(Rd, page))
-
-                Loop
-
-                copy.FreeReader(Rd)
-
-                Rd.Close()
-
-                If System.IO.File.Exists(nomArc) Then
-                    System.IO.File.Delete(nomArc)
-                End If
-
-            Next
-
-        Catch ex As Exception
-            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ARCHIVOSXML\errores.log", Format(Date.Now, "dd/MM/yyyy HH:mm") & " - " & ex.Message & vbCrLf, True)
-        Finally
-            releaseObject(wbXl)
-            releaseObject(appXL)
-            ' Cerramos el documento
-
-            Doc.Close()
-            'AgregarLink(lNomfinal)
-        End Try
+        stng = Nothing
+        pmkr2 = Nothing ' Discontinue associa
+        'libro.EnableEvents = True
+        'libro.ScreenUpdating = True
+        'libro.DisplayAlerts = True
+        KillProcess("acrodist.exe")
     End Sub
 
-    Private Sub AgregarLink(ByVal gArchivo As String)
-        'Dim oldFile As String = "SomePath/Existing.pdf"
-        Dim newFile As String = "C:\Users\Arturo Gallegos\Desktop\MODULOS\POLIZAS\Arana\prueba.pdf"
+    Public Sub KillProcess(ByVal processName As String)
+        On Error GoTo ErrHandler
+        Dim oWMI
+        Dim ret
+        Dim sService
+        Dim oWMIServices
+        Dim oWMIService
+        Dim oServices
+        Dim oService
+        Dim servicename
 
-        ' Create reader
-        Dim reader As New PdfReader(gArchivo)
-        Dim size As Rectangle = reader.GetPageSizeWithRotation(1)
-        Dim document As New Document(size)
+        oWMI = GetObject("winmgmts:")
+        oServices = oWMI.InstancesOf("win32_process")
 
-        ' Create the writer
-        Dim fs As New FileStream(newFile, FileMode.Create, FileAccess.Write)
-        Dim writer As PdfWriter = PdfWriter.GetInstance(document, fs)
-        document.Open()
-        Dim cb As PdfContentByte = writer.DirectContent
+        For Each oService In oServices
+            servicename =
+    LCase(Trim(CStr(oService.Name) & ""))
 
-        ' Set the font, color and size properties for writing text to the PDF
-        Dim bf As BaseFont = BaseFont.CreateFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED)
-        cb.SetColorFill(BaseColor.DARK_GRAY)
-        cb.SetFontAndSize(bf, 8)
+            If InStr(1, servicename,
+    LCase(processName), vbTextCompare) > 0 Then
+                ret = oService.Terminate
+            End If
+        Next
 
-        ' Write text in the PDF
-        cb.BeginText()
-        Dim text As String = "Some text here"
-
-        ' Set the alignment and coordinates here
-        cb.ShowTextAligned(1, text, 520, 640, 0)
-
-        cb.EndText()
-
-
-        Dim Tema1 As New Anchor("Tema 1") 'declaración del vínculo con el texto que se mostrara en el documento
-        Tema1.Reference = "#Tema 1"       'nombre de la referencia dl vículo declarado
-
-        document.Add(Tema1)              'se agrega el vículo al documento
-
-        ' Put the text on a new page in the PDF 
-        Dim page As PdfImportedPage = writer.GetImportedPage(reader, 1)
-        cb.AddTemplate(page, 0, 0)
-
-        ' Close the objects
-        document.Close()
-        fs.Close()
-        writer.Close()
-        reader.Close()
+        oServices = Nothing
+        oWMI = Nothing
+        Exit Sub
+ErrHandler:
+        Err.Clear()
     End Sub
+
 End Module
