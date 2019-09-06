@@ -10,6 +10,10 @@ Module modImprimeXML
     Private Const maxTime As Long = 20
     Public Const tFactura As String = "FACTURA"
     Public Const tPoliza As String = "POLIZA"
+    Public Const directContaXMLNUBE As String = "Contabilidad/Contabilidad/ExpedientesContables/ARCHIVOSXML"
+
+    Public dCarpetas As Dictionary(Of String, String)
+    Public sConCarpetas As Boolean
     Private Enum iColEnc
         iTipo = 1
         iFecha = 2
@@ -52,7 +56,7 @@ Module modImprimeXML
         Dim lGuidDocument As Guid
 
         'rutaExiste = "C:\Users\Arturo Gallegos\Desktop\MODULOS\ARCHIVOXML\" & sEmpresa & "\"
-        rutaExiste = FC_RutaModulos & "\ARCHIVOSXML\" & sEmpresa & "\"
+        rutaExiste = FC_RutaModulos & "\ArchivosIncloud\" & sEmpresa & "\ARCHIVOSXML\"
 
         If Not System.IO.Directory.Exists(rutaExiste) Then
             Exit Sub
@@ -218,14 +222,89 @@ Module modImprimeXML
 
     Private Sub CrearArchivosXML(ByVal conE As SqlConnection,
                                  ByVal cEmpresa As String, ByVal plantilla As String)
-        Dim nXml As CLXml
+        Dim nXml As CLXml, sExiste As Boolean
+        dCarpetas = New Dictionary(Of String, String)
+        sExiste = False
+
         For Each nXml In cgXML
+            sExiste = True
             If Creafactura(nXml, cEmpresa, plantilla) = True Then
 
             End If
 
         Next nXml
+        'If sExiste = True Then
+        '    Anexalink(cEmpresa)
+        'End If
+    End Sub
 
+
+    Public Sub Anexalink(ByVal aemp As String)
+        Dim appExcel As Microsoft.Office.Interop.Excel.Application = Nothing
+        Dim wbExcel As Microsoft.Office.Interop.Excel.Workbook = Nothing
+        Dim wsExcel As Microsoft.Office.Interop.Excel.Worksheet = Nothing
+
+        Dim rutalibro As String, linkstring As String
+        Dim x As Long, aUUID As String
+        appExcel = New Microsoft.Office.Interop.Excel.Application
+        appExcel.Visible = False
+        appExcel.DisplayAlerts = False
+        Try
+            For t = 0 To dCarpetas.Count - 1
+                rutalibro = FC_RutaModulos & "\ArchivosIncloud\" &
+            aemp & "\ARCHIVOSXML\" & dCarpetas.Item(dCarpetas.Keys(t)) &
+            "\pdfs\relacion\" & dCarpetas.Keys(t) & ".xlsx"
+
+                wbExcel = appExcel.Workbooks.Open(rutalibro)
+                wsExcel = wbExcel.ActiveSheet
+
+                With wsExcel
+                    x = 2
+                    Do While .Cells(x, 1).value <> ""
+                        If .Cells(x, 8).value = "" And .Cells(x, 9).value <> "" Then
+                            linkstring = getLinkCompartido(.Cells(x, 9).value)
+                            If linkstring <> "" Then
+                                .Cells(x, 8).value = linkstring
+                                aUUID = .Cells(x, 7).value
+                                .Hyperlinks.Add(Anchor:= .Range("G" & CStr(x)),
+                                                        Address:=linkstring,
+                                                        TextToDisplay:=aUUID)
+                            End If
+                        End If
+                        x += 1
+                    Loop
+                    .Columns("A:H").AutoFit
+                    .Columns("H:I").Hidden = True
+                End With
+
+                wbExcel.Save()
+
+                appExcel.ScreenUpdating = False
+                appExcel.DisplayAlerts = False
+
+                wbExcel.ExportAsFixedFormat(Type:=Excel.XlFixedFormatType.xlTypePDF,
+                                             Filename:=FC_RutaModulos & "\ArchivosIncloud\" &
+            aemp & "\ARCHIVOSXML\" & dCarpetas.Item(dCarpetas.Keys(t)) &
+            "\pdfs\relacion\" & dCarpetas.Keys(t),
+                                             Quality:=Excel.XlFixedFormatQuality.xlQualityStandard,
+                                             IncludeDocProperties:=True, IgnorePrintAreas:=False,
+                                             OpenAfterPublish:=False)
+
+                wsExcel = Nothing
+                wbExcel.Close()
+                wbExcel = Nothing
+                appExcel.Quit()
+            Next
+        Catch ex As Exception
+            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ArchivosIncloud\" & aemp & "\ARCHIVOSXML\errores.log", Format(Now, "dd/MM/yyy HH:mm") & " - " & ex.Message & vbCrLf, True)
+        Finally
+            releaseObject(wsExcel)
+            releaseObject(wbExcel)
+            releaseObject(appExcel)
+        End Try
+
+
+        dCarpetas = Nothing
     End Sub
 
     Public Function Creafactura(ByVal factu As CLXml,
@@ -239,12 +318,13 @@ Module modImprimeXML
         Dim Izquierda As Single
         Dim Arriba As Single
         Dim Alto As Double
-        Dim Fname As String = ""
+        Dim Fname As String = "", complementoruta As String, rutaGuarda As String
+        Dim compleRelacion As String
         Creafactura = True
         Dim i As Integer = 11
         Try
             'Fname = "C:\Users\Arturo Gallegos\Desktop\MODULOS\plantillafactura.xlsx"
-            Fname = FC_RutaModulos & "\ARCHIVOSXML\" & cEmpresa & "\" & plantilla
+            Fname = FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\ARCHIVOSXML\" & plantilla
 
             appXL = New Microsoft.Office.Interop.Excel.Application
             appXL.Visible = False
@@ -252,6 +332,8 @@ Module modImprimeXML
             shXL = wbXl.ActiveSheet
             With shXL
                 ''ENCABEZADO
+                complementoruta = Year(factu.SFecha) & "\" & UCase(MonthName(Month(factu.SFecha)))
+                compleRelacion = UCase(MonthName(Month(factu.SFecha))) & Year(factu.SFecha)
                 .Cells(3, iColEnc.iTipo).value = factu.STipo
                 .Cells(3, iColEnc.iFecha).value = "'" & factu.SFecha
                 .Cells(3, iColEnc.iSerie).value = factu.SSerie
@@ -331,7 +413,7 @@ Module modImprimeXML
                 Arriba = Celda.Top - Alto
 
                 'rutaQr = "C:\Users\Arturo Gallegos\Desktop\MODULOS\ARCHIVOXML\codigoQr.bmp"
-                rutaQr = FC_RutaModulos & "\ARCHIVOSXML\codigoQr.bmp"
+                rutaQr = FC_RutaModulos & "\ArchivosIncloud\codigoQr.bmp"
                 .Shapes.AddPicture(rutaQr, False, True, Izquierda, Arriba, 90, 80)
 
             End With
@@ -339,9 +421,26 @@ Module modImprimeXML
             appXL.DisplayAlerts = False
             '        wbXl.SaveAs("C:\Users\Arturo Gallegos\Desktop\MODULOS\ARCHIVOXML\" & cEmpresa & "\" & factu.SUUID.ToString & ".xlsx", Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, False, False,
             '0, Microsoft.Office.Interop.Excel.XlSaveConflictResolution.xlLocalSessionChanges, Type.Missing, Type.Missing)
+            rutaGuarda = FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\ARCHIVOSXML\" & complementoruta
+            If Not System.IO.Directory.Exists(rutaGuarda) Then
+                My.Computer.FileSystem.CreateDirectory(rutaGuarda)
+                My.Computer.FileSystem.CreateDirectory(rutaGuarda & "\pdfs")
+                My.Computer.FileSystem.CreateDirectory(rutaGuarda & "\pdfs\relacion")
+            End If
 
-            wbXl.SaveAs(FC_RutaModulos & "\ARCHIVOSXML\" & cEmpresa & "\" & factu.SUUID.ToString & ".xlsx", Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, False, False,
+            wbXl.SaveAs(rutaGuarda & "\" & UCase(factu.SUUID.ToString) & ".xlsx", Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, False, False,
     0, Microsoft.Office.Interop.Excel.XlSaveConflictResolution.xlLocalSessionChanges, Type.Missing, Type.Missing)
+
+            appXL.ScreenUpdating = False
+            appXL.DisplayAlerts = False
+            shXL.ExportAsFixedFormat(Type:=Excel.XlFixedFormatType.xlTypePDF,
+                                     Filename:=rutaGuarda & "\pdfs\" & UCase(factu.SUUID.ToString),
+                                     Quality:=Excel.XlFixedFormatQuality.xlQualityStandard,
+                                     IncludeDocProperties:=True, IgnorePrintAreas:=True,
+                                     OpenAfterPublish:=False)
+
+            AsociacionesXML(factu, cEmpresa, rutaGuarda & "\pdfs\relacion\" & GlobalRFCEmpresa & compleRelacion)
+
             Celda = Nothing
             wbXl.Close()
             wbXl = Nothing
@@ -349,7 +448,7 @@ Module modImprimeXML
 
         Catch ex As Exception
             Creafactura = False
-            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ARCHIVOSXML\errores.log", Format(Now, "01/MM/yyy HH:mm") & " - " & ex.Message & vbCrLf, True)
+            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\ARCHIVOSXML\errores.log", Format(Now, "dd/MM/yyy HH:mm") & " - " & ex.Message & vbCrLf, True)
         Finally
             releaseObject(Celda)
             releaseObject(shXL)
@@ -358,20 +457,131 @@ Module modImprimeXML
         End Try
     End Function
 
+    Public Sub AsociacionesXML(ByVal tdocum As CLXml, ByVal tEmpresa As String, ByVal rArchivo As String)
+        Dim appExcel As Microsoft.Office.Interop.Excel.Application = Nothing
+        Dim wbExcel As Microsoft.Office.Interop.Excel.Workbook = Nothing
+        Dim wsExcel As Microsoft.Office.Interop.Excel.Worksheet = Nothing
+
+        Dim rutalibro As String, f As Long, linkstring As String
+        Dim x As Long
+        appExcel = New Microsoft.Office.Interop.Excel.Application
+        appExcel.Visible = False
+        appExcel.DisplayAlerts = False
+        f = 0
+        Try
+            If Not System.IO.File.Exists(rArchivo & ".xlsx") Then
+                rutalibro = FC_RutaModulos & "\ArchivosIncloud\" & tEmpresa & "\ARCHIVOSXML\relacionxml.xlsx"
+            Else
+                rutalibro = rArchivo & ".xlsx"
+            End If
+
+            wbExcel = appExcel.Workbooks.Open(rutalibro)
+            wsExcel = wbExcel.ActiveSheet
+
+            f = getLastRow(wsExcel) + 1
+
+            With wsExcel
+                If f > 2 Then
+                    x = 2
+                    Do While .Cells(x, 1).value <> ""
+                        If .Cells(x, 7).value = tdocum.SUUID.ToString Then
+                            f = x
+                            Exit Do
+                        End If
+                        x += 1
+                    Loop
+                End If
+
+                .Cells(f, 1) = "'" & tdocum.SFecha
+                .Cells(f, 2) = IIf(tdocum.STipo = "I", "INGRESO", "EGRESO")
+                .Cells(f, 3) = tdocum.SFolio
+                .Cells(f, 4) = tdocum.SNombreEmisor
+                .Cells(f, 5) = tdocum.SNombreReceptor
+                .Cells(f, 6) = tdocum.STotalXML
+                .Cells(f, 7) = UCase(tdocum.SUUID.ToString)
+                'If f = 2 Or .Cells(f, 8).value = "" Then
+                linkstring = ""
+                'linkstring = getLinkCompartido(directContaXMLNUBE & "/" &
+                'Year(tdocum.SFecha) & "/" &
+                'UCase(MonthName(Month(tdocum.SFecha))) & "/pdfs/" & tdocum.SUUID.ToString & ".pdf")
+                .Cells(f, 9) = directContaXMLNUBE & "/" &
+                                                 Year(tdocum.SFecha) & "/" &
+                                                 UCase(MonthName(Month(tdocum.SFecha))) & "/pdfs/" &
+                                                 UCase(tdocum.SUUID.ToString) & ".pdf"
+
+                Dim sRut As String, sKey As String
+                sKey = GlobalRFCEmpresa & UCase(MonthName(Month(tdocum.SFecha))) & Year(tdocum.SFecha)
+                sRut = Year(tdocum.SFecha) & "\" & UCase(MonthName(Month(tdocum.SFecha)))
+                If Not dCarpetas.ContainsKey(sKey) Then
+                    dCarpetas.Add(sKey, sRut)
+                End If
+
+                'Else
+                '    linkstring = ""
+                'End If
+                'If linkstring <> "" Then
+                '    .Hyperlinks.Add(Anchor:= .Range("G" & CStr(f)),
+                '                                        Address:=linkstring,
+                '                                        TextToDisplay:=tdocum.SUUID.ToString)
+                'End If
+                .PageSetup.Zoom = False
+                .PageSetup.FitToPagesTall = 1
+                .PageSetup.FitToPagesWide = 1
+                .PageSetup.PaperSize = Excel.XlPaperSize.xlPaperLetter
+                .PageSetup.Orientation = Excel.XlPageOrientation.xlLandscape
+
+                .Cells(f, 8) = linkstring
+                .Columns("A:H").AutoFit
+            End With
+
+            If f = 2 Then
+                wbExcel.SaveAs(rArchivo & ".xlsx", Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, False, False,
+        0, Microsoft.Office.Interop.Excel.XlSaveConflictResolution.xlLocalSessionChanges, Type.Missing, Type.Missing)
+            Else
+                wbExcel.Save()
+            End If
+
+            'wbExcel.ExportAsFixedFormat(Type:=Excel.XlFixedFormatType.xlTypePDF,
+            '                             Filename:=rArchivo,
+            '                             Quality:=Excel.XlFixedFormatQuality.xlQualityStandard,
+            '                             IncludeDocProperties:=True, IgnorePrintAreas:=False,
+            '                             OpenAfterPublish:=False)
+
+            wsExcel = Nothing
+            wbExcel.Close()
+            wbExcel = Nothing
+            appExcel.Quit()
+        Catch ex As Exception
+            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ArchivosIncloud\" & tEmpresa & "\ARCHIVOSXML\errores.log", Format(Now, "dd/MM/yyy HH:mm") & " - " & ex.Message & vbCrLf, True)
+        Finally
+            releaseObject(wsExcel)
+            releaseObject(wbExcel)
+            releaseObject(appExcel)
+        End Try
+
+    End Sub
+
     Public Sub ImprimeExpediente(ByVal cUUID As String, ByVal uCon As SqlConnection, ByVal cEmpresa As String)
         Dim appXL As Microsoft.Office.Interop.Excel.Application = Nothing
         Dim wbXl As Microsoft.Office.Interop.Excel.Workbook = Nothing
         Dim shXL As Microsoft.Office.Interop.Excel.Worksheet = Nothing
         Dim cQue As String = "", ref As String, Concep As String
         Dim f As Integer = 4
-        Dim Fname As String = ""
+        Dim Fname As String = "", nomRur As String, nombrerutapdf As String
         'Fname = "C:\Users\Arturo Gallegos\Desktop\MODULOS\ARCHIVOXML\" & cEmpresa & "\" & cUUID & ".xlsx"
-        Fname = FC_RutaModulos & "\ARCHIVOSXML\" & cEmpresa & "\" & cUUID & ".xlsx"
-        If Not System.IO.Directory.Exists(FC_RutaModulos & "\ARCHIVOSXML\" & cEmpresa) Then
+        nomRur = FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\ARCHIVOSXML"
+        If Not System.IO.Directory.Exists(nomRur) Then
             Exit Sub
         End If
 
+        'Fname = FC_RutaModulos & "\ArchivosIncloud\ARCHIVOSXML\" & cEmpresa & "\" & cUUID & ".xlsx"
+        Fname = GetRutaFile(nomRur, UCase(cUUID) & ".xlsx")
+
         If System.IO.File.Exists(Fname) Then
+            nombrerutapdf = Path.GetDirectoryName(Fname)
+            If sConCarpetas = False Then
+                DesMarcarLink(nombrerutapdf, UCase(cUUID), cEmpresa)
+            End If
             Try
                 appXL = New Microsoft.Office.Interop.Excel.Application
                 appXL.Visible = False
@@ -408,14 +618,29 @@ Module modImprimeXML
                     End Using
                 End With
 
+
                 appXL.DisplayAlerts = False
                 wbXl.Save()
+
+                appXL.ScreenUpdating = False
+                appXL.DisplayAlerts = False
+                shXL.ExportAsFixedFormat(Type:=Excel.XlFixedFormatType.xlTypePDF,
+                                     Filename:=nombrerutapdf & "\pdfs\" & UCase(cUUID),
+                                     Quality:=Excel.XlFixedFormatQuality.xlQualityStandard,
+                                     IncludeDocProperties:=True, IgnorePrintAreas:=False,
+                                     OpenAfterPublish:=False)
+
+                shXL = Nothing
                 wbXl.Close()
                 wbXl = Nothing
-                appXL.Workbooks.Close()
+                appXL.Quit()
+
+                'wbXl.Close()
+                'wbXl = Nothing
+                'appXL.Workbooks.Close()
 
             Catch ex As Exception
-                My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ARCHIVOSXML\errores.log", Format(Now, "01/MM/yyy HH:mm") & " - " & ex.Message & vbCrLf, True)
+                My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\ARCHIVOSXML\errores.log", Format(Now, "01/MM/yyy HH:mm") & " - " & ex.Message & vbCrLf, True)
             Finally
                 releaseObject(shXL)
                 releaseObject(wbXl)
@@ -448,7 +673,7 @@ Module modImprimeXML
                 End If
             Next
         Catch ex As Exception
-            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ARCHIVOSXML\errores.log", Format(Now, "01/MM/yyy HH:mm") & " - " & ex.Message & vbCrLf, True)
+            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ArchivosIncloud\errores.log", Format(Now, "01/MM/yyy HH:mm") & " - " & ex.Message & vbCrLf, True)
         End Try
     End Sub
 
@@ -459,7 +684,7 @@ Module modImprimeXML
         generador.Format = BarcodeFormat.QR_CODE
         'sRut = "C:\Users\Arturo Gallegos\Desktop\MODULOS\ARCHIVOXML\codigoQr.bmp"
 
-        sRut = FC_RutaModulos & "\ARCHIVOSXML\codigoQr.bmp"
+        sRut = FC_RutaModulos & "\ArchivosIncloud\codigoQr.bmp"
 
         Dim imagen As Bitmap = New Bitmap(generador.Write(codigoQ), 500, 500)
         imagen.Save(sRut)
@@ -501,10 +726,10 @@ Module modImprimeXML
         Dim sEntroRecord As Boolean, cfQue As String
 
         Dim tImporteTotal, tImporteBase, tImporteIVA, tImporteNoAcred As Double
-
+        Dim complementoruta As String
         Dim dProveedores As New Dictionary(Of String, String)
 
-        If Not System.IO.Directory.Exists(FC_RutaModulos & "\POLIZAS\" & cEmpresa) Then
+        If Not System.IO.Directory.Exists(FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\POLIZAS") Then
             Exit Function
         End If
 
@@ -517,13 +742,13 @@ Module modImprimeXML
                 Using mCr = mcom.ExecuteReader()
                     mCr.Read()
                     If mCr.HasRows Then
-                        nomArchivo = FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & mCr("Guid") & ".pdf"
 
                         GuidPoliza = mCr("Guid")
 
                         appXL = New Microsoft.Office.Interop.Excel.Application
                         appXL.Visible = False
-                        wbXl = appXL.Workbooks.Open(FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & nomPlantilla)
+
+                        wbXl = appXL.Workbooks.Open(FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\POLIZAS\" & nomPlantilla)
                         shXL = wbXl.ActiveSheet
 
                         With shXL
@@ -537,7 +762,8 @@ Module modImprimeXML
                             .Cells(4, 19).value = IIf(claEmpresa.CCodigoPostal <> "", Trim(claEmpresa.CCodigoPostal), "0")
 
                             ''ENCABEZADO POLIZA
-                            .Cells(8, 1).value = IIf(mCr("Fecha").ToString <> "", Mid(mCr("Fecha").ToString, 1, 10), "")
+                            complementoruta = Year(mCr("Fecha")) & "\" & UCase(MonthName(Month(mCr("Fecha"))))
+                            .Cells(8, 1).value = "'" & IIf(mCr("Fecha").ToString <> "", Mid(mCr("Fecha").ToString, 1, 10), "")
                             .Cells(8, 3).value = IIf(mCr("Nombre") <> "", Trim(mCr("Nombre")), "")
                             .Cells(8, 5).value = IIf(mCr("Folio").ToString <> "", Trim(mCr("Folio").ToString), "")
                             .Cells(8, 6).value = IIf(mCr("Concepto") <> "", Trim(mCr("Concepto")), "")
@@ -816,7 +1042,8 @@ Module modImprimeXML
                                                     .Cells(f, 19).Value = movCr("Total")
                                                     .Cells(f, 19).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
 
-                                                    nomfac = FC_RutaModulos & "\ARCHIVOSXML\" & cEmpresa & "\" & cRs("UUID") & ".xlsx"
+                                                    'nomfac = FC_RutaModulos & "\ArchivosIncloud\ARCHIVOSXML\" & cEmpresa & "\" & cRs("UUID") & ".xlsx"
+                                                    nomfac = GetRutaFile(FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\ARCHIVOSXML", cRs("UUID") & ".xlsx")
                                                     If System.IO.File.Exists(nomfac) Then
                                                         filAnt = f
 
@@ -832,10 +1059,13 @@ Module modImprimeXML
                                                         appXLFac.ActiveWindow.DisplayGridlines = False
                                                         shXLFac.Range("A1:P" & CStr(uFil)).Copy()
 
-                                                        f = f + 1
-                                                        With wbXl.Sheets(n).PageSetup
-                                                            .PaperSize = Excel.XlPaperSize.xlPaperLetter
-                                                            .Orientation = Excel.XlPageOrientation.xlLandscape
+                                                        Dim sheetTemp As Excel.Worksheet
+                                                        sheetTemp = wbXl.Sheets(n)
+                                                        sheetTemp.Activate()
+
+                                                        With sheetTemp.PageSetup
+                                                            '.PaperSize = Excel.XlPaperSize.xlPaperLetter
+                                                            '.Orientation = Excel.XlPageOrientation.xlLandscape
                                                             .Zoom = False
                                                             .FitToPagesTall = 1
                                                             .FitToPagesWide = 1
@@ -843,6 +1073,7 @@ Module modImprimeXML
                                                             .LeftMargin = 4
                                                             .BottomMargin = 4
                                                             .TopMargin = 9
+                                                            .Orientation = Excel.XlPageOrientation.xlLandscape
 
                                                             wbXl.Sheets(n).Range("A2").PasteSpecial(
                                                                 Paste:=Excel.XlPasteType.xlPasteAll, SkipBlanks:=False)
@@ -893,15 +1124,19 @@ Module modImprimeXML
                                 Next
                             End If
                             appXL.DisplayAlerts = False
-
+                            appXL.ScreenUpdating = False
                             .PageSetup.RightMargin = 4
                             .PageSetup.LeftMargin = 4
                             .PageSetup.BottomMargin = 4
                             .PageSetup.TopMargin = 9
                             '        wbXl.SaveAs(FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & GuidPoliza & ".xlsx", Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, False, False,
                             '0, Microsoft.Office.Interop.Excel.XlSaveConflictResolution.xlLocalSessionChanges, Type.Missing, Type.Missing)
+                            nomArchivo = FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\POLIZAS\" & complementoruta
 
-                            CrearPolizaPDF(appXL, FC_RutaModulos & "\POLIZAS\" & cEmpresa & "\" & GuidPoliza & ".pdf")
+                            If Not System.IO.Directory.Exists(nomArchivo) Then
+                                My.Computer.FileSystem.CreateDirectory(nomArchivo)
+                            End If
+                            CrearPolizaPDF(appXL, nomArchivo & "\" & GuidPoliza & ".pdf")
 
                             shXL = Nothing
                             wbXl.Close(False)
@@ -909,13 +1144,14 @@ Module modImprimeXML
                             appXL.Quit()
                             appXL = Nothing
 
+                            ImprimePoliza = GuidPoliza
                         End With
                     End If
                 End Using
             End Using
         Catch ex As Exception
             ImprimePoliza = ""
-            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ARCHIVOSXML\errores.log", Format(Date.Now, "dd/MM/yyyy HH:mm") & " - " & ex.Message & vbCrLf, True)
+            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\POLIZAS\errores.log", Format(Date.Now, "dd/MM/yyyy HH:mm") & " - " & ex.Message & vbCrLf, True)
         Finally
             releaseObject(shXL)
             releaseObject(wbXl)
@@ -1012,4 +1248,58 @@ ErrHandler:
         Err.Clear()
     End Sub
 
+    Private Sub DesMarcarLink(ByVal mRuta As String, ByVal mUUId As String, ByVal mEmpresa As String)
+        Dim appExcel As Microsoft.Office.Interop.Excel.Application = Nothing
+        Dim wbExcel As Microsoft.Office.Interop.Excel.Workbook = Nothing
+        Dim wsExcel As Microsoft.Office.Interop.Excel.Worksheet = Nothing
+
+        Dim x As Long
+
+        Try
+            Dim rArchivo As String = mRuta
+            Dim dDatos() As String = Split(rArchivo, "\")
+            Dim sMes As String = dDatos(UBound(dDatos))
+            Dim sYear As String = dDatos(UBound(dDatos) - 1)
+            rArchivo = rArchivo & "\pdfs\relacion\" & GlobalRFCEmpresa & sMes & sYear & ".xlsx"
+            If Not System.IO.File.Exists(rArchivo) Then
+                Exit Sub
+            End If
+            appExcel = New Microsoft.Office.Interop.Excel.Application
+            appExcel.Visible = False
+            appExcel.DisplayAlerts = False
+
+            wbExcel = appExcel.Workbooks.Open(rArchivo)
+            wsExcel = wbExcel.ActiveSheet
+
+            With wsExcel
+                x = 2
+                Do While .Cells(x, 1).value <> ""
+                    If UCase(.Cells(x, 7).value) = UCase(mUUId) Then
+                        .Cells(x, 8).value = ""
+                        Exit Do
+                    End If
+                    x += 1
+                Loop
+            End With
+
+            Dim sRut As String, sKey As String
+            sKey = GlobalRFCEmpresa & UCase(sMes) & sYear
+            sRut = sYear & "\" & UCase(sMes)
+            If Not dCarpetas.ContainsKey(sKey) Then
+                dCarpetas.Add(sKey, sRut)
+            End If
+
+            wbExcel.Save()
+            wsExcel = Nothing
+            wbExcel.Close()
+            wbExcel = Nothing
+            appExcel.Quit()
+        Catch ex As Exception
+            My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ArchivosIncloud\" & mEmpresa & "\ARCHIVOSXML\errores.log", Format(Now, "dd/MM/yyy HH:mm") & " - " & ex.Message & vbCrLf, True)
+        Finally
+            releaseObject(wsExcel)
+            releaseObject(wbExcel)
+            releaseObject(appExcel)
+        End Try
+    End Sub
 End Module

@@ -232,4 +232,13 @@ ERR_GETCONS:
         End Using
     End Function
 
+    Public Function GetRutaFile(ByVal gRuta As String, ByVal gNombre As String) As String
+        Dim files() As String = System.IO.Directory.GetFiles(
+            gRuta, gNombre, IO.SearchOption.AllDirectories)
+        GetRutaFile = ""
+        For Each file In files
+            GetRutaFile = file
+            Exit For
+        Next file
+    End Function
 End Module

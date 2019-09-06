@@ -1,9 +1,16 @@
 ﻿Imports System.Data.SqlClient
 Imports System.IO
+Imports System.Net
+Imports System.Text
 Imports Microsoft.Office.Interop
 
 Module modFuncione
     Public cgXML As New Collection
+    Public GlobalRFCEmpresa As String
+    Private servidorNUBE As String = "cloud.dublock.com"
+    Private userNUBE As String = "admindublock"
+    Private passNUBE As String = "4u1B6nyy3W"
+    Private carpetaDefault As String = "PruebaSincro"
     Public Sub CreaXML(ByVal cNombreEmpresa As String,
                        Optional allEmp As Boolean = True,
                        Optional Fechai As Date = Nothing,
@@ -29,6 +36,8 @@ Module modFuncione
                 cQuery = "SELECT id, FechaAutomatic FROM EEFEmpresas WHERE NomEmpresa='" & nomCon & "'"
                 idEmpresa = GetDatoInt(cQuery, "id", FC_Con)
 
+                GlobalRFCEmpresa = getRFCEmpresa()
+
                 If allEmp = True Then
                     fechaini = Format(GetDatoFecha(cQuery, "FechaAutomatic", FC_Con), "yyyy-MM-dd")
                     fechafin = Format(Date.Now, "yyyy-MM-dd")
@@ -49,7 +58,7 @@ Module modFuncione
                                 plantilla = Path.GetFileName(cR("plantilla"))
                             Else
                                 If allEmp = True Then
-                                    My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ARCHIVOSXML\errores.log", Format(Now, "01/MM/yyy HH:mm") & " - la plantilla no se encontro de la empresa." & nomCon & "" & vbCrLf, True)
+                                    My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\" & nomCon & "\ARCHIVOSXML\errores.log", Format(Now, "dd/MM/yyy HH:mm") & " - la plantilla no se encontro de la empresa." & nomCon & "" & vbCrLf, True)
                                 Else
                                     MsgBox("La plantilla de la empresa. " & nomCon & " no se encontro", vbInformation, "Validación")
                                 End If
@@ -121,6 +130,13 @@ Otraempresa:
         Dim nomCon As String, fechaini As Date, fechafin As Date
         Dim cVersionGuarda As Integer, idEmpresa As Integer, cQueryAsoc As String
 
+        If IsNothing(dCarpetas) Then
+            dCarpetas = New Dictionary(Of String, String)
+            sConCarpetas = False
+        Else
+            sConCarpetas = True
+        End If
+
         For t = 0 To DConexionesCFDI.Count - 1
             nomCon = DConexionesCFDI.Keys(t)
             If cNombreEmpresa = nomCon Or allEmp = True Then
@@ -133,6 +149,8 @@ Otraempresa:
                 cVersionAnt = GetDatoInt(cQuery, "lastVersion", DConexiones("CON"))
                 cQuery = "SELECT id, FechaAutomatic FROM EEFEmpresas WHERE NomEmpresa='" & nomCon & "'"
                 idEmpresa = GetDatoInt(cQuery, "id", FC_Con)
+
+                GlobalRFCEmpresa = getRFCEmpresa()
 
                 If allEmp = True Then
                     fechaini = Format(GetDatoFecha(cQuery, "FechaAutomatic", FC_Con), "yyyy-MM-dd")
@@ -218,7 +236,8 @@ Otraempresa:
                         End Using
                     End Using
                 End If
-
+                Anexalink(nomCon)
+                sConCarpetas = True
                 If esBoton = True Then cVersion = cVersionGuarda
                 cVersion = IIf(cVersion = 0, 1, cVersion)
                 cQuery = "DELETE FROM zEEFControlVersion WHERE Tipo=@tip"
@@ -305,6 +324,7 @@ Otraempresa:
         Dim nomCon As String, fechaini As Date, fechafin As Date
         Dim cVersionGuarda As Integer, idEmpresa As Integer, cQueryAsoc As String
         Dim plantilla As String, guid As String, clasEmpresa As CLEmpresa
+        Dim nomArchivo As String
 
         For t = 0 To PConexionesPol.Count - 1
             nomCon = PConexionesPol.Keys(t)
@@ -363,7 +383,7 @@ Otraempresa:
                                 plantilla = Path.GetFileName(cR("plantilla"))
                             Else
                                 If allEmp = True Then
-                                    My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ARCHIVOSXML\errores.log", Format(Now, "01/MM/yyy HH:mm") & " - la plantilla no se encontro de la empresa." & nomCon & "" & vbCrLf, True)
+                                    My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\" & nomCon & "\ARCHIVOSXML\errores.log", Format(Now, "01/MM/yyy HH:mm") & " - la plantilla no se encontro de la empresa." & nomCon & "" & vbCrLf, True)
                                 Else
                                     MsgBox("La plantilla de la empresa. " & nomCon & " no se encontro", vbInformation, "Validación")
                                 End If
@@ -409,12 +429,12 @@ Otraempresa:
                     If cTabla = "Polizas" Then
                         cQuery = "DECLARE @last_synchronization_version bigint
                         SET @last_synchronization_version = CHANGE_TRACKING_MIN_VALID_VERSION(OBJECT_ID('dbo." & cTabla & "'))
-                            SELECT  Ct.* FROM CHANGETABLE(CHANGES " & cTabla & ", @last_synchronization_version) as CT 
+                            SELECT  Ct.id,ct.SYS_CHANGE_OPERATION FROM CHANGETABLE(CHANGES " & cTabla & ", @last_synchronization_version) as CT 
                             WHERE SYS_CHANGE_VERSION > @uversion ORDER  BY CT.SYS_CHANGE_VERSION ASC"
                     Else
                         cQuery = "DECLARE @last_synchronization_version bigint
                         SET @last_synchronization_version = CHANGE_TRACKING_MIN_VALID_VERSION(OBJECT_ID('dbo." & cTabla & "'))
-                            SELECT  Ct.*,t.IdPoliza FROM CHANGETABLE(CHANGES '" & cTabla & "', @last_synchronization_version) as CT 
+                            SELECT  t.IdPoliza,Ct.* FROM CHANGETABLE(CHANGES '" & cTabla & "', @last_synchronization_version) as CT 
                             INNER JOIN " & cTabla & " t ON  Ct.id=t.Id
                             WHERE SYS_CHANGE_VERSION > @uversion ORDER  BY CT.SYS_CHANGE_VERSION ASC"
                     End If
@@ -424,31 +444,35 @@ Otraempresa:
                             Do While mRs.Read()
                                 If mRs("SYS_CHANGE_OPERATION") <> "D" Then
 
-                                    guid = ImprimePoliza(nomCon, mRs("id"), plantilla, fechaini, fechafin, clasEmpresa)
+                                    guid = ImprimePoliza(nomCon, mRs.Item(0), plantilla, fechaini, fechafin, clasEmpresa)
                                     If guid <> "" Then
                                         cQueryAsoc = "INSERT INTO zEEFControlPoliza(idPoliza, Guid)VALUES(@idpol, @guid)"
                                         Using cCom = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
-                                            cCom.Parameters.AddWithValue("@idpol", mRs("id"))
+                                            cCom.Parameters.AddWithValue("@idpol", mRs.Item(0))
                                             cCom.Parameters.AddWithValue("@guid", guid)
                                             cCom.ExecuteNonQuery()
                                         End Using
                                     End If
                                 Else
-                                    'cQueryAsoc = "SELECT UUID FROM zEEFControlUUID WHERE idAsocCFDI=@idasoc"
-                                    'Using cCom = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
-                                    '    cCom.Parameters.AddWithValue("@idasoc", mRs("id"))
-                                    '    Using cr = cCom.ExecuteReader()
-                                    '        cr.Read()
-                                    '        If cr.HasRows Then
-                                    '            ImprimeExpediente(cr("UUID"), DConexionesCFDI(nomCon), nomCon)
-                                    '            cQueryAsoc = "DELETE FROM zEEFControlUUID WHERE idAsocCFDI=@idasoc"
-                                    '            Using cComD = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
-                                    '                cComD.Parameters.AddWithValue("@idasoc", mRs("id"))
-                                    '                cComD.ExecuteNonQuery()
-                                    '            End Using
-                                    '        End If
-                                    '    End Using
-                                    'End Using
+                                    cQueryAsoc = "SELECT Guid FROM zEEFControlPoliza WHERE idPoliza=@idpol"
+                                    Using cCom = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
+                                        cCom.Parameters.AddWithValue("@idpol", mRs.Item(0))
+                                        Using cr = cCom.ExecuteReader()
+                                            cr.Read()
+                                            If cr.HasRows Then
+                                                nomArchivo = FC_RutaModulos & "\ArchivosIncloud\POLIZAS\" & nomCon & "\" & cr("Guid") & ".pdf"
+                                                If System.IO.File.Exists(nomArchivo) = True Then
+                                                    System.IO.File.Delete(nomArchivo)
+                                                End If
+                                                guid = ImprimePoliza(nomCon, mRs.Item(0), plantilla, fechaini, fechafin, clasEmpresa)
+                                                cQueryAsoc = "DELETE FROM zEEFControlPoliza WHERE idPoliza=@idpol"
+                                                Using cComD = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
+                                                    cComD.Parameters.AddWithValue("@idpol", mRs.Item(0))
+                                                    cComD.ExecuteNonQuery()
+                                                End Using
+                                            End If
+                                        End Using
+                                    End Using
                                 End If
                                 cVersion = mRs("SYS_CHANGE_VERSION")
                             Loop
@@ -484,5 +508,67 @@ Otraempresa:
         Exit Function
 Err:
         If Err.Number = 91 Then getLastRow = 0
+    End Function
+
+    Public Function getRFCEmpresa()
+        Dim cQue As String
+        getRFCEmpresa = ""
+        cQue = "SELECT RFC FROM Parametros"
+        Using gCom = New SqlCommand(cQue, DConexiones("CON"))
+            Using gCr = gCom.ExecuteReader()
+                gCr.Read()
+                If gCr.HasRows Then
+                    getRFCEmpresa = gCr("RFC")
+                End If
+            End Using
+        End Using
+    End Function
+
+    Public Function getLinkCompartido(ByVal direcArchivo As String) As String
+        getLinkCompartido = ""
+        Dim myReq As HttpWebRequest
+        Dim enc As UTF8Encoding
+        Dim postdatabytes As Byte()
+        Dim response As HttpWebResponse
+        Dim reader As StreamReader
+        Dim rawresponse As String, sServidor As String
+
+        sServidor = "https://" & userNUBE & ":" & passNUBE & "@" & servidorNUBE & "/ocs/v2.php/apps/files_sharing/api/v1/shares"
+        myReq = HttpWebRequest.Create(sServidor)
+
+        Try
+            enc = New System.Text.UTF8Encoding()
+            '"path=" & carpetaDefault & "/" & GlobalRFCEmpresa & "/" & direcArchivo & "&shareType=3"
+            postdatabytes = enc.GetBytes("path=" & carpetaDefault & "/" & GlobalRFCEmpresa & "/" & direcArchivo & "&shareType=3")
+            myReq.Method = "POST"
+            myReq.ContentType = "application/x-www-form-urlencoded"
+            myReq.ContentLength = postdatabytes.Length
+            myReq.Headers.Add("OCS-APIREQUEST", "true")
+            myReq.Headers.Add("Authorization", "Basic " & Convert.ToBase64String(Encoding.UTF8.GetBytes(userNUBE & ":" & passNUBE)))
+            Using stream = myReq.GetRequestStream()
+                stream.Write(postdatabytes, 0, postdatabytes.Length)
+            End Using
+            response = DirectCast(myReq.GetResponse(), HttpWebResponse)
+            reader = New StreamReader(response.GetResponseStream())
+
+            rawresponse = reader.ReadToEnd()
+            getLinkCompartido = extraerLink(rawresponse)
+
+        Catch ex As Exception
+            getLinkCompartido = ""
+        End Try
+    End Function
+
+    Public Function extraerLink(ByVal exDatos As String) As String
+        Dim nodoraiz As XElement
+        Dim doc As XDocument = New XDocument()
+        doc = XDocument.Parse(exDatos)
+        extraerLink = ""
+        Try
+            nodoraiz = doc.Element("ocs")
+            extraerLink = nodoraiz.Elements("data").Elements("url").Value
+        Catch ex As Exception
+            extraerLink = ""
+        End Try
     End Function
 End Module
