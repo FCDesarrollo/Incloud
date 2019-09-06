@@ -1,6 +1,8 @@
 ﻿Imports System.ComponentModel
 Imports System.Data
 Imports System.Data.SqlClient
+Imports System.IO
+
 Public Class frmprincipal
     ' Public m_connect As String = "Data Source=10.10.10.15\COMPAC;Initial Catalog=FCModulos;User Id=sa;Password=compac$1;MultipleActiveResultSets=True"
     Private con As SqlConnection = Nothing
@@ -176,6 +178,7 @@ Public Class frmprincipal
     End Sub
 
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+
         letr = New NumaLet
         letr.ApocoparUnoParteEntera = True
         CargaConexiones()

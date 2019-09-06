@@ -10,6 +10,8 @@
 
     Private _mIva As Double
     Private _mIeps As Double
+
+
     Public Property MImporte As Double
         Get
             Return _mImporte
@@ -103,4 +105,5 @@
             _mIeps = value
         End Set
     End Property
+
 End Class

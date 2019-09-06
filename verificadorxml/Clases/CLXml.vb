@@ -37,6 +37,7 @@
     Private _sVersionSello As String
 
     Private _sCodigoQr As String
+
     Private _movXml As New Collection
 
     Public Property SFormaPago As String
@@ -44,6 +45,7 @@
             Return _sFormaPago
         End Get
         Set(value As String)
+
             _sFormaPago = value
         End Set
     End Property
