@@ -86,3 +86,5 @@ C:\Users\Arturo\source\repos\Incloud\verificadorxml\obj\Debug\Incloud.exe
 C:\Users\Arturo\source\repos\Incloud\verificadorxml\obj\Debug\Incloud.xml
 C:\Users\Arturo\source\repos\Incloud\verificadorxml\obj\Debug\Incloud.pdb
 C:\Users\Arturo\source\repos\Incloud\verificadorxml\obj\Debug\Interop.AdobePDFMakerForOffice.dll
+C:\Users\Arturo\source\repos\Incloud\verificadorxml\bin\Debug\Newtonsoft.Json.dll
+C:\Users\Arturo\source\repos\Incloud\verificadorxml\bin\Debug\Newtonsoft.Json.xml

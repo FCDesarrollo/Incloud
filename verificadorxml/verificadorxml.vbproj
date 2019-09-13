@@ -53,6 +53,9 @@
     <Reference Include="Microsoft.SqlServer.Types, Version=14.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.SqlServer.Types.14.0.1016.290\lib\net40\Microsoft.SqlServer.Types.dll</HintPath>
     </Reference>
+    <Reference Include="Newtonsoft.Json, Version=12.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\packages\Newtonsoft.Json.12.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Deployment" />
@@ -84,8 +87,10 @@
     <Import Include="System.Threading.Tasks" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Clases\clBitacora.vb" />
     <Compile Include="Clases\CLEmpresa.vb" />
     <Compile Include="Clases\CLMovXml.vb" />
+    <Compile Include="Clases\clRegistroBitacora.vb" />
     <Compile Include="Clases\CLXml.vb" />
     <Compile Include="Clases\NumaLet.vb" />
     <Compile Include="Formularios\frmConfig.Designer.vb">
@@ -107,6 +112,7 @@
     <Compile Include="Formularios\frmProcesar.vb">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Modulos\modApi.vb" />
     <Compile Include="Modulos\modFunciones.vb" />
     <Compile Include="Modulos\modGeneral.vb" />
     <Compile Include="Modulos\modImprimeXML.vb" />

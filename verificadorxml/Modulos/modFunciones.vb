@@ -30,7 +30,7 @@ Module modFuncione
 
                 cVersion = 0
 
-                cQuery = "SELECT TOP (1) lastVersion FROM zEEFControlVersion WHERE Tipo='" & "XML" & "' ORDER BY lastVersion DESC"
+                cQuery = "SELECT TOP (1) lastVersion FROM zIncControlVersion WHERE Tipo='" & "XML" & "' ORDER BY lastVersion DESC"
                 cVersionAnt = GetDatoInt(cQuery, "lastVersion", DConexiones("CON"))
 
                 cQuery = "SELECT id, FechaAutomatic FROM EEFEmpresas WHERE NomEmpresa='" & nomCon & "'"
@@ -58,7 +58,7 @@ Module modFuncione
                                 plantilla = Path.GetFileName(cR("plantilla"))
                             Else
                                 If allEmp = True Then
-                                    My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\" & nomCon & "\ARCHIVOSXML\errores.log", Format(Now, "dd/MM/yyy HH:mm") & " - la plantilla no se encontro de la empresa." & nomCon & "" & vbCrLf, True)
+                                    My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\" & nomCon & "\COMPROBANTES\errores.log", Format(Now, "dd/MM/yyy HH:mm") & " - la plantilla no se encontro de la empresa." & nomCon & "" & vbCrLf, True)
                                 Else
                                     MsgBox("La plantilla de la empresa. " & nomCon & " no se encontro", vbInformation, "Validación")
                                 End If
@@ -99,15 +99,16 @@ Module modFuncione
                     End Using
 
                 End If
-
+                Anexalink(nomCon)
+                SincronizaBitacora("COMPROBANTES", nomCon)
                 If esBoton = True Then cVersion = cVersionGuarda
                 cVersion = IIf(cVersion = 0, 1, cVersion)
-                cQuery = "DELETE FROM zEEFControlVersion WHERE Tipo=@tip"
+                cQuery = "DELETE FROM zIncControlVersion WHERE Tipo=@tip"
                 Using dleCom = New SqlCommand(cQuery, DConexiones("CON"))
                     dleCom.Parameters.AddWithValue("@tip", "XML")
                     dleCom.ExecuteNonQuery()
                 End Using
-                cQuery = "INSERT INTO zEEFControlVersion(lastVersion, fecha_version, Tipo)
+                cQuery = "INSERT INTO zIncControlVersion(lastVersion, fecha_version, Tipo)
                                             VALUES(@last, @fechave, @tip)"
                 Using gCom = New SqlCommand(cQuery, DConexiones("CON"))
                     gCom.Parameters.AddWithValue("@last", cVersion)
@@ -119,6 +120,7 @@ Module modFuncione
             End If
 Otraempresa:
         Next
+        KillAllExcels()
     End Sub
 
 
@@ -145,7 +147,7 @@ Otraempresa:
 
                 cVersion = 0
 
-                cQuery = "SELECT TOP (1) lastVersion FROM zEEFControlVersion WHERE Tipo='" & "CFDI" & "' ORDER BY lastVersion DESC"
+                cQuery = "SELECT TOP (1) lastVersion FROM zIncControlVersion WHERE Tipo='" & "CFDI" & "' ORDER BY lastVersion DESC"
                 cVersionAnt = GetDatoInt(cQuery, "lastVersion", DConexiones("CON"))
                 cQuery = "SELECT id, FechaAutomatic FROM EEFEmpresas WHERE NomEmpresa='" & nomCon & "'"
                 idEmpresa = GetDatoInt(cQuery, "id", FC_Con)
@@ -205,7 +207,7 @@ Otraempresa:
                                         Using mRsA = mcomA.ExecuteReader()
                                             Do While mRsA.Read()
                                                 ImprimeExpediente(mRsA("UUID"), DConexionesCFDI(nomCon), nomCon)
-                                                cQueryAsoc = "INSERT INTO zEEFControlUUID(idAsocCFDI, UUID)VALUES(@idasoc, @uuid)"
+                                                cQueryAsoc = "INSERT INTO zIncControlUUID(idAsocCFDI, UUID)VALUES(@idasoc, @uuid)"
                                                 Using cCom = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
                                                     cCom.Parameters.AddWithValue("@idasoc", mRs("id"))
                                                     cCom.Parameters.AddWithValue("@uuid", mRsA("UUID"))
@@ -215,14 +217,14 @@ Otraempresa:
                                         End Using
                                     End Using
                                 ElseIf mRs("SYS_CHANGE_OPERATION") = "D" Then
-                                    cQueryAsoc = "SELECT UUID FROM zEEFControlUUID WHERE idAsocCFDI=@idasoc"
+                                    cQueryAsoc = "SELECT UUID FROM zIncControlUUID WHERE idAsocCFDI=@idasoc"
                                     Using cCom = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
                                         cCom.Parameters.AddWithValue("@idasoc", mRs("id"))
                                         Using cr = cCom.ExecuteReader()
                                             cr.Read()
                                             If cr.HasRows Then
                                                 ImprimeExpediente(cr("UUID"), DConexionesCFDI(nomCon), nomCon)
-                                                cQueryAsoc = "DELETE FROM zEEFControlUUID WHERE idAsocCFDI=@idasoc"
+                                                cQueryAsoc = "DELETE FROM zIncControlUUID WHERE idAsocCFDI=@idasoc"
                                                 Using cComD = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
                                                     cComD.Parameters.AddWithValue("@idasoc", mRs("id"))
                                                     cComD.ExecuteNonQuery()
@@ -240,12 +242,12 @@ Otraempresa:
                 sConCarpetas = True
                 If esBoton = True Then cVersion = cVersionGuarda
                 cVersion = IIf(cVersion = 0, 1, cVersion)
-                cQuery = "DELETE FROM zEEFControlVersion WHERE Tipo=@tip"
+                cQuery = "DELETE FROM zIncControlVersion WHERE Tipo=@tip"
                 Using dleCom = New SqlCommand(cQuery, DConexiones("CON"))
                     dleCom.Parameters.AddWithValue("@tip", "CFDI")
                     dleCom.ExecuteNonQuery()
                 End Using
-                cQuery = "INSERT INTO zEEFControlVersion(lastVersion, fecha_version, Tipo)
+                cQuery = "INSERT INTO zIncControlVersion(lastVersion, fecha_version, Tipo)
                                             VALUES(@last, @fechave, @tip)"
                 Using gCom = New SqlCommand(cQuery, DConexiones("CON"))
                     gCom.Parameters.AddWithValue("@last", cVersion)
@@ -297,20 +299,45 @@ Otraempresa:
         If IsNothing(DConexiones) Then FC_GetCons()
         DConexiones("CON").ChangeDatabase(nombase)
 
-        cQue = "IF OBJECT_ID('dbo.zEEFControlVersion') IS NULL " &
-                    "CREATE TABLE [dbo].[zEEFControlVersion](
+        cQue = "IF OBJECT_ID('dbo.zIncControlVersion') IS NULL " &
+                    "CREATE TABLE [dbo].[zIncControlVersion](
 	                [lastVersion] [bigint] NOT NULL,
 	                [fecha_version] [date] NULL,
-	                [fecha_inicio] [date] NULL,
 	                [Tipo] [nvarchar](50) NULL) ON [PRIMARY]"
         cpCom = New SqlCommand(cQue, DConexiones("CON"))
         cpCom.ExecuteNonQuery()
         cpCom.Dispose()
 
-        cQue = "IF OBJECT_ID('dbo.zEEFControlUUID') IS NULL " &
-                    "CREATE TABLE [dbo].[zEEFControlUUID](
+        cQue = "IF OBJECT_ID('dbo.zIncControlUUID') IS NULL " &
+                    "CREATE TABLE [dbo].[zIncControlUUID](
 	                    [idAsocCFDI] [int] NULL,
 	                    [UUID] [varchar](36) NULL) ON [PRIMARY] "
+        cpCom = New SqlCommand(cQue, DConexiones("CON"))
+        cpCom.ExecuteNonQuery()
+        cpCom.Dispose()
+
+        cQue = "IF OBJECT_ID('dbo.zIncControlPoliza') IS NULL " &
+                    "CREATE TABLE [dbo].[zIncControlPoliza](
+	                        [idPoliza] [int] NULL,
+	                        [Guid] [varchar](36) NULL
+                        ) ON [PRIMARY] "
+        cpCom = New SqlCommand(cQue, DConexiones("CON"))
+        cpCom.ExecuteNonQuery()
+        cpCom.Dispose()
+
+        cQue = "IF OBJECT_ID('dbo.zIncContBitacora') IS NULL " &
+                    "CREATE TABLE [dbo].[zIncContBitacora](
+	                    [id] [int] IDENTITY(1,1) NOT NULL,
+	                    [idsubmenu] [int] NULL,
+	                    [tipodocumento] [nvarchar](250) NULL,
+	                    [periodo] [int] NULL,
+	                    [ejercicio] [int] NULL,
+	                    [fecha] [date] NULL,
+	                    [fechamodificacion] [datetime] NULL,
+	                    [archivo] [nvarchar](250) NULL,
+	                    [nombrearchivo] [nvarchar](250) NULL,
+	                    [sincronizado] [int] NULL
+                    ) ON [PRIMARY] "
         cpCom = New SqlCommand(cQue, DConexiones("CON"))
         cpCom.ExecuteNonQuery()
         cpCom.Dispose()
@@ -332,12 +359,16 @@ Otraempresa:
                 If IsNothing(DConexiones) Then FC_GetCons()
                 DConexiones("CON").ChangeDatabase(PConexionesPol(nomCon).Database)
 
+                dCarpetasPol = New Dictionary(Of String, String)
+
                 cVersion = 0
 
-                cQuery = "SELECT TOP (1) lastVersion FROM zEEFControlVersion WHERE Tipo='" & cTipo & "' ORDER BY lastVersion DESC"
+                cQuery = "SELECT TOP (1) lastVersion FROM zIncControlVersion WHERE Tipo='" & cTabla & "' ORDER BY lastVersion DESC"
                 cVersionAnt = GetDatoInt(cQuery, "lastVersion", DConexiones("CON"))
                 cQuery = "SELECT id, FechaAutomatic FROM EEFEmpresas WHERE NomEmpresa='" & nomCon & "'"
                 idEmpresa = GetDatoInt(cQuery, "id", FC_Con)
+
+                GlobalRFCEmpresa = getRFCEmpresa()
 
                 If allEmp = True Then
                     fechaini = Format(GetDatoFecha(cQuery, "FechaAutomatic", FC_Con), "yyyy-MM-dd")
@@ -383,7 +414,7 @@ Otraempresa:
                                 plantilla = Path.GetFileName(cR("plantilla"))
                             Else
                                 If allEmp = True Then
-                                    My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\" & nomCon & "\ARCHIVOSXML\errores.log", Format(Now, "01/MM/yyy HH:mm") & " - la plantilla no se encontro de la empresa." & nomCon & "" & vbCrLf, True)
+                                    My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\" & nomCon & "\COMPROBANTES\errores.log", Format(Now, "01/MM/yyy HH:mm") & " - la plantilla no se encontro de la empresa." & nomCon & "" & vbCrLf, True)
                                 Else
                                     MsgBox("La plantilla de la empresa. " & nomCon & " no se encontro", vbInformation, "Validación")
                                 End If
@@ -413,9 +444,9 @@ Otraempresa:
                         mcom.Parameters.AddWithValue("@fechFin", Format(fechafin, "yyyy-MM-dd"))
                         Using mRs = mcom.ExecuteReader()
                             Do While mRs.Read()
-                                guid = ImprimePoliza(nomCon, mRs("id"), plantilla, fechaini, fechafin, clasEmpresa)
+                                guid = ImprimePoliza(nomCon, mRs("id"), plantilla, fechaini, fechafin, clasEmpresa, False)
                                 If guid <> "" Then
-                                    cQueryAsoc = "INSERT INTO zEEFControlPoliza(idPoliza, Guid)VALUES(@idpol, @guid)"
+                                    cQueryAsoc = "INSERT INTO zIncControlPoliza(idPoliza, Guid)VALUES(@idpol, @guid)"
                                     Using cCom = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
                                         cCom.Parameters.AddWithValue("@idpol", mRs("id"))
                                         cCom.Parameters.AddWithValue("@guid", guid)
@@ -442,19 +473,19 @@ Otraempresa:
                         mcom.Parameters.AddWithValue("@uversion", cVersionAnt)
                         Using mRs = mcom.ExecuteReader()
                             Do While mRs.Read()
-                                If mRs("SYS_CHANGE_OPERATION") <> "D" Then
+                                If mRs("SYS_CHANGE_OPERATION") <> "D" Or cTabla <> "Polizas" Then
 
-                                    guid = ImprimePoliza(nomCon, mRs.Item(0), plantilla, fechaini, fechafin, clasEmpresa)
+                                    guid = ImprimePoliza(nomCon, mRs.Item(0), plantilla, fechaini, fechafin, clasEmpresa, False)
                                     If guid <> "" Then
-                                        cQueryAsoc = "INSERT INTO zEEFControlPoliza(idPoliza, Guid)VALUES(@idpol, @guid)"
+                                        cQueryAsoc = "INSERT INTO zIncControlPoliza(idPoliza, Guid)VALUES(@idpol, @guid)"
                                         Using cCom = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
                                             cCom.Parameters.AddWithValue("@idpol", mRs.Item(0))
                                             cCom.Parameters.AddWithValue("@guid", guid)
                                             cCom.ExecuteNonQuery()
                                         End Using
                                     End If
-                                Else
-                                    cQueryAsoc = "SELECT Guid FROM zEEFControlPoliza WHERE idPoliza=@idpol"
+                                ElseIf cTabla = "Polizas" Then
+                                    cQueryAsoc = "SELECT Guid FROM zIncControlPoliza WHERE idPoliza=@idpol"
                                     Using cCom = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
                                         cCom.Parameters.AddWithValue("@idpol", mRs.Item(0))
                                         Using cr = cCom.ExecuteReader()
@@ -464,8 +495,8 @@ Otraempresa:
                                                 If System.IO.File.Exists(nomArchivo) = True Then
                                                     System.IO.File.Delete(nomArchivo)
                                                 End If
-                                                guid = ImprimePoliza(nomCon, mRs.Item(0), plantilla, fechaini, fechafin, clasEmpresa)
-                                                cQueryAsoc = "DELETE FROM zEEFControlPoliza WHERE idPoliza=@idpol"
+                                                guid = ImprimePoliza(nomCon, mRs.Item(0), plantilla, fechaini, fechafin, clasEmpresa, True)
+                                                cQueryAsoc = "DELETE FROM zIncControlPoliza WHERE idPoliza=@idpol"
                                                 Using cComD = New SqlCommand(cQueryAsoc, DConexionesCFDI(nomCon))
                                                     cComD.Parameters.AddWithValue("@idpol", mRs.Item(0))
                                                     cComD.ExecuteNonQuery()
@@ -479,27 +510,30 @@ Otraempresa:
                         End Using
                     End Using
                 End If
-
+                AnexalinkPol(nomCon)
+                SincronizaBitacora("POLIZAS", nomCon)
                 If esBoton = False Then
                     cVersion = IIf(cVersion = 0, 1, cVersion)
-                    cQuery = "DELETE FROM zEEFControlVersion WHERE Tipo=@tip"
+                    cQuery = "DELETE FROM zIncControlVersion WHERE Tipo=@tip"
                     Using dleCom = New SqlCommand(cQuery, DConexiones("CON"))
-                        dleCom.Parameters.AddWithValue("@tip", cTipo)
+                        dleCom.Parameters.AddWithValue("@tip", cTabla)
                         dleCom.ExecuteNonQuery()
                     End Using
-                    cQuery = "INSERT INTO zEEFControlVersion(lastVersion, fecha_version, Tipo)
+                    cQuery = "INSERT INTO zIncControlVersion(lastVersion, fecha_version, Tipo)
                                             VALUES(@last, @fechave, @tip)"
                     Using gCom = New SqlCommand(cQuery, DConexiones("CON"))
                         gCom.Parameters.AddWithValue("@last", cVersion)
                         gCom.Parameters.AddWithValue("@fechave", Date.Now.Date)
-                        gCom.Parameters.AddWithValue("@tip", cTipo)
+                        gCom.Parameters.AddWithValue("@tip", cTabla)
                         gCom.ExecuteNonQuery()
 
                     End Using
                 End If
             End If
 Otraempresa:
+            dCarpetasPol = Nothing
         Next
+        KillAllExcels()
     End Sub
 
     Public Function getLastRow(ByRef sht As Excel.Worksheet) As Long
@@ -571,4 +605,53 @@ Err:
             extraerLink = ""
         End Try
     End Function
+
+    Public Sub SincronizaBitacora(ByVal bTipo As String, ByVal bEmpresa As String)
+        Dim bQue As String, cReg As Boolean
+        Dim bita As clBitacora, regBit As clRegistroBitacora
+        Dim eDato As String, jsonMod As String
+
+        cReg = False
+        bita = New clBitacora
+        bita.Rfc = GlobalRFCEmpresa
+        bita.Idsubmenu = 4
+        bita.Tipodocumento = bTipo
+        bita.Idusuariosubida = 1
+        bita.Idusuarioentrega = 0
+        bita.Status = 0
+        bQue = "SELECT periodo,ejercicio,archivo,nombrearchivo 
+                    FROM zIncContBitacora WHERE tipodocumento=@tipo AND sincronizado=0"
+        Using bCom = New SqlCommand(bQue, DConexiones("CON"))
+            bCom.Parameters.AddWithValue("@tipo", bTipo)
+            Using bcr = bCom.ExecuteReader()
+                Do While bcr.Read()
+                    cReg = True
+                    regBit = New clRegistroBitacora
+                    regBit.Periodo = bcr("periodo")
+                    regBit.Ejercicio = bcr("ejercicio")
+                    regBit.Archivo = bcr("archivo")
+                    regBit.Nombrearchivo = bcr("nombrearchivo")
+
+                    bita.Regbitacora.Add(regBit)
+                Loop
+            End Using
+        End Using
+
+        If cReg = True Then
+            eDato = Newtonsoft.Json.JsonConvert.SerializeObject(bita)
+            If eDato <> "" Then
+                jsonMod = ConsumeAPI("registraBitacora", eDato)
+                If jsonMod = "false" Then
+                    My.Computer.FileSystem.WriteAllText(FC_RutaModulos & "\ArchivosIncloud\" & bEmpresa & "\COMPROBANTES\errores.log", Format(Now, "dd/MM/yyy HH:mm") & " - " & "Error la sincronizar COMPROBANTES" & vbCrLf, True)
+                Else
+                    bQue = "UPDATE zIncContBitacora SET sincronizado=1 WHERE tipodocumento=@tipo 
+                            AND sincronizado=0"
+                    Using bCom = New SqlCommand(bQue, DConexiones("CON"))
+                        bCom.Parameters.AddWithValue("@tipo", bTipo)
+                        bCom.ExecuteNonQuery()
+                    End Using
+                End If
+            End If
+        End If
+    End Sub
 End Module

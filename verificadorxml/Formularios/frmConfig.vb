@@ -79,8 +79,8 @@ Public Class frmConfig
         idEmp = CInt(cbEmpresas.SelectedValue)
         sEmpresa = cbEmpresas.Text
 
-        If Not Directory.Exists(FC_RutaModulos & "\ArchivosIncloud\" & sEmpresa & "\ARCHIVOSXML") Then
-            My.Computer.FileSystem.CreateDirectory(FC_RutaModulos & "\ArchivosIncloud\" & sEmpresa & "\ARCHIVOSXML")
+        If Not Directory.Exists(FC_RutaModulos & "\ArchivosIncloud\" & sEmpresa & "\COMPROBANTES") Then
+            My.Computer.FileSystem.CreateDirectory(FC_RutaModulos & "\ArchivosIncloud\" & sEmpresa & "\COMPROBANTES")
         End If
 
         If Not Directory.Exists(FC_RutaModulos & "\ArchivosIncloud\" & sEmpresa & "\POLIZAS") Then
@@ -109,14 +109,14 @@ Public Class frmConfig
         End Using
 
         If ckFactura.Checked = True Then
-            FileSystem.FileCopy(txtPlantillaFac.Tag, FC_RutaModulos & "\ArchivosIncloud\" & sEmpresa & "\ARCHIVOSXML\" & txtPlantillaFac.Text)
+            FileSystem.FileCopy(txtPlantillaFac.Tag, FC_RutaModulos & "\ArchivosIncloud\" & sEmpresa & "\COMPROBANTES\" & txtPlantillaFac.Text)
             gQue = "INSERT INTO EEFPlantillaDoc(idempresa,activo,tipo,plantilla)
                     VALUES(@idemp, @activo, @tipo, @plantilla)"
             Using cCom = New SqlCommand(gQue, FC_Con)
                 cCom.Parameters.AddWithValue("@idemp", idEmp)
                 cCom.Parameters.AddWithValue("@activo", 1)
                 cCom.Parameters.AddWithValue("@tipo", tFactura)
-                cCom.Parameters.AddWithValue("@plantilla", FC_RutaModulos & "\ArchivosIncloud\" & sEmpresa & "\ARCHIVOSXML\" & txtPlantillaFac.Text)
+                cCom.Parameters.AddWithValue("@plantilla", FC_RutaModulos & "\ArchivosIncloud\" & sEmpresa & "\COMPROBANTES\" & txtPlantillaFac.Text)
                 cCom.ExecuteNonQuery()
             End Using
         End If
@@ -218,14 +218,14 @@ Public Class frmConfig
         End Using
 
         If txtPlantillaFac.Tag <> "" Then
-            FileSystem.FileCopy(txtPlantillaFac.Tag, FC_RutaModulos & "\ARCHIVOSXML\" & sEmpresa & "\" & txtPlantillaFac.Text)
+            FileSystem.FileCopy(txtPlantillaFac.Tag, FC_RutaModulos & "\COMPROBANTES\" & sEmpresa & "\" & txtPlantillaFac.Text)
         End If
 
         eQue = "UPDATE EEFPlantillaDoc SET activo=@acti, plantilla=@plant
                     WHERE idempresa=@idemp AND tipo=@tip"
         Using cCom = New SqlCommand(eQue, FC_Con)
             cCom.Parameters.AddWithValue("@acti", IIf(ckFactura.Checked, 1, 0))
-            cCom.Parameters.AddWithValue("@plant", FC_RutaModulos & "\ARCHIVOSXML\" & sEmpresa & "\" & txtPlantillaFac.Text)
+            cCom.Parameters.AddWithValue("@plant", FC_RutaModulos & "\COMPROBANTES\" & sEmpresa & "\" & txtPlantillaFac.Text)
             cCom.Parameters.AddWithValue("@idemp", idEmp)
             cCom.Parameters.AddWithValue("@tip", tFactura)
             cCom.ExecuteNonQuery()

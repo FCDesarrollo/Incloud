@@ -166,6 +166,15 @@ Public Class frmprincipal
                         End Using
                     End If
 
+                    If TablaConSeguimiento("MovimientosPoliza", DConexiones("CON")) = False Then
+                        cQue = "ALTER TABLE MovimientosPoliza
+                                        ENABLE CHANGE_TRACKING
+                                        WITH (TRACK_COLUMNS_UPDATED = ON)"
+                        Using cCom = New SqlCommand(cQue, DConexiones("CON"))
+                            cCom.ExecuteNonQuery()
+                        End Using
+                    End If
+
                     m_connect = "Data Source=" & conData(0) & ";Initial Catalog=" & rsTras("BDDCon") & ";User Id=" & conData(1) & ";Password=" & conData(2) & ";MultipleActiveResultSets=True"
                     PConexionesPol.Add(rsTras("NomEmpresa"), New SqlConnection)
                     PConexionesPol(rsTras("NomEmpresa")).ConnectionString = m_connect
@@ -188,7 +197,7 @@ Public Class frmprincipal
 
         ''PARA LAS POLIZAS
         AddHandler OnNewHomePol, New NewHome(AddressOf Form1_OnNewHomePol)
-        'AddHandler OnNewHomeMovPol, New NewHome(AddressOf Form1_OnNewHome2)
+        AddHandler OnNewHomeMovPol, New NewHome(AddressOf Form1_OnNewHomeMovPol)
         'AddHandler OnNewHomeDevo, New NewHome(AddressOf Form1_OnNewHome)
         'AddHandler OnNewHomeCausa, New NewHome(AddressOf Form1_OnNewHome2)
         'AddHandler OnNewHomeAsoc, New NewHome(AddressOf Form1_OnNewHome)
@@ -197,6 +206,7 @@ Public Class frmprincipal
         LoadData()
         LoadCFDI()
         LoadPoliza()
+        LoadMovPoliza()
         sload = False
     End Sub
 
@@ -263,7 +273,7 @@ Public Class frmprincipal
             i.BeginInvoke(dd, Nothing)
             Return
         End If
-        ''FALTA
+        LoadMovPoliza()
     End Sub
 
     Public Sub Form1_OnNewHome2()
@@ -445,6 +455,7 @@ Public Class frmprincipal
             CreaPoliza("", "POLIZA", "Polizas", True)
         End If
     End Sub
+
     Public Sub de_OnChange(sender As Object, e As SqlNotificationEventArgs)
         Dim nomCon As String
         Dim dependency As SqlDependency = CType(sender, SqlDependency)
@@ -487,7 +498,75 @@ Public Class frmprincipal
         End If
     End Sub
 
+    Public Sub de_OnChangeMovPol(sender As Object, e As SqlNotificationEventArgs)
+        Dim nomCon As String
+        Dim dependency As SqlDependency = CType(sender, SqlDependency)
 
+        For t = 0 To PConexionesPol.Count - 1
+            nomCon = PConexionesPol.Keys(t)
+            RemoveHandler DSQLDependeMovPol(nomCon).OnChange, AddressOf de_OnChangeMovPol
+        Next
+
+        If dependency IsNot Nothing AndAlso dependency.HasChanges Then
+            RaiseEvent OnNewHomeMovPol()
+        End If
+    End Sub
+
+    Public Sub LoadMovPoliza()
+        Dim dtshow As DataTable = New DataTable()
+        Dim dtshow2 As DataTable = New DataTable()
+        Dim dt As DataTable = New DataTable()
+        Dim DDtable As Dictionary(Of String, DataTable)
+        Dim t As Integer, nomCon As String, sQuery As String
+
+        Dim DSQLCommand As Dictionary(Of String, SqlCommand)
+        Dim DSQLCommandNoti As Dictionary(Of String, SqlCommand)
+
+
+        DSQLCommand = New Dictionary(Of String, SqlCommand)
+        DSQLCommandNoti = New Dictionary(Of String, SqlCommand)
+
+        DSQLDependeMovPol = New Dictionary(Of String, SqlDependency)
+
+        DDtable = New Dictionary(Of String, DataTable)
+
+        For t = 0 To PConexionesPol.Count - 1
+            nomCon = PConexionesPol.Keys(t)
+
+            If PConexionesPol(nomCon).State = ConnectionState.Closed Then
+                PConexionesPol(nomCon).Open()
+            End If
+
+            sQuery = "SELECT id FROM dbo.MovimientosPoliza"
+            DSQLCommandNoti(nomCon) = New SqlCommand(sQuery, PConexionesPol(nomCon))
+
+            DSQLCommandNoti(nomCon).Notification = Nothing
+
+            DSQLDependeMovPol(nomCon) = New SqlDependency(DSQLCommandNoti(nomCon))
+
+            DDtable(nomCon) = New DataTable
+
+
+            DDtable(nomCon).Load(DSQLCommandNoti(nomCon).ExecuteReader(CommandBehavior.CloseConnection))
+
+
+            AddHandler DSQLDependeMovPol(nomCon).OnChange, AddressOf de_OnChangeMovPol
+
+        Next
+
+
+        For t = 0 To PConexionesPol.Count - 1
+            nomCon = PConexionesPol.Keys(t)
+
+            If PConexionesPol(nomCon).State = ConnectionState.Closed Then
+                PConexionesPol(nomCon).Open()
+            End If
+        Next
+
+        If sload = False Then
+            CreaPoliza("", "POLIZA", "MovimientosPoliza", True)
+        End If
+    End Sub
 
 
     Private Sub frmprincipal_Resize(sender As Object, e As EventArgs) Handles Me.Resize
