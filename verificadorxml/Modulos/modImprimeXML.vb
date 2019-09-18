@@ -267,7 +267,12 @@ Module modImprimeXML
                 wsExcel = wbExcel.ActiveSheet
 
                 With wsExcel
-                    x = 2
+                    dDatos = Split(dCarpetas.Item(dCarpetas.Keys(t)), "\")
+                    .Cells(2, 1).value = .Cells(2, 1).value & " de " & UCase(MonthName(CInt(dDatos(1)))) & " del 20" & dDatos(0)
+                    '.Cells(3, 2).value = CInt(dDatos(0))
+                    '.Cells(3, 3).value = "Periodo"
+                    '.Cells(3, 4).value = Format(dDatos(1), "00")
+                    x = 5
                     Do While .Cells(x, 1).value <> ""
                         If .Cells(x, 8).value = "" And .Cells(x, 9).value <> "" Then
                             linkstring = getLinkCompartido(.Cells(x, 9).value)
@@ -281,8 +286,10 @@ Module modImprimeXML
                         End If
                         x += 1
                     Loop
-                    .Columns("A:H").AutoFit
+                    .Columns("B:H").AutoFit
                     .Columns("H:I").Hidden = True
+                    .Columns("A:I").Sort(key1:= .Range("A4"),
+      order1:=Excel.XlSortOrder.xlDescending, header:=Excel.XlYesNoGuess.xlYes)
                 End With
 
                 wbExcel.Save()
@@ -293,20 +300,20 @@ Module modImprimeXML
                 wbExcel.ExportAsFixedFormat(Type:=Excel.XlFixedFormatType.xlTypePDF,
                                              Filename:=FC_RutaModulos & "\ArchivosIncloud\" &
             aemp & "\COMPROBANTES\" & dCarpetas.Item(dCarpetas.Keys(t)) &
-            "\pdfs\relacion\" & dCarpetas.Keys(t) & "Comprobantes",
+            "\pdfs\relacion\" & dCarpetas.Keys(t) & "_CFDI",
                                              Quality:=Excel.XlFixedFormatQuality.xlQualityStandard,
                                              IncludeDocProperties:=True, IgnorePrintAreas:=False,
                                              OpenAfterPublish:=False)
 
-                dDatos = Split(dCarpetas.Item(dCarpetas.Keys(t)), "\")
+                'dDatos = Split(dCarpetas.Item(dCarpetas.Keys(t)), "\")
                 regbit = New clRegistroBitacora
                 strmes = dDatos(1)
                 fecha = CDate("01/" & strmes & "/" & CStr(Year(Date.Now.Date)))
                 mes = Month(fecha)
                 regbit.Periodo = mes
                 regbit.Ejercicio = CInt(dDatos(0))
-                regbit.Archivo = dCarpetas.Keys(t) & "Comprobantes.pdf"
-                regbit.Nombrearchivo = GlobalRFCEmpresa & "-COM" & Format(mes, "00") & dDatos(0)
+                regbit.Archivo = dCarpetas.Keys(t) & "_CFDI.pdf"
+                regbit.Nombrearchivo = GlobalRFCEmpresa & "_" & Right(dDatos(0), 2) & Format(mes, "00") & "_CFDI"
                 clasebit.Regbitacora.Add(regbit)
 
 
@@ -357,7 +364,13 @@ Module modImprimeXML
                 wsExcel = wbExcel.ActiveSheet
 
                 With wsExcel
-                    x = 2
+                    dDatos = Split(dCarpetasPol.Item(dCarpetasPol.Keys(t)), "\")
+                    .Cells(3, 1).value = .Cells(2, 1).value & " de " & UCase(MonthName(CInt(dDatos(1)))) & " del 20" & dDatos(0)
+                    '.Cells(3, 2).value = CInt(dDatos(0))
+                    '.Cells(3, 3).value = "Periodo"
+                    '.Cells(3, 4).value = dDatos(1)
+
+                    x = 5
                     Do While .Cells(x, 1).value <> ""
                         If .Cells(x, 7).value = "" And .Cells(x, 8).value <> "" Then
                             linkstring = getLinkCompartido(.Cells(x, 8).value)
@@ -371,8 +384,10 @@ Module modImprimeXML
                         End If
                         x += 1
                     Loop
-                    .Columns("A:F").AutoFit
+                    .Columns("B:F").AutoFit
                     .Columns("G:I").Hidden = True
+                    .Columns("A:I").Sort(key1:= .Range("A4"),
+      order1:=Excel.XlSortOrder.xlDescending, header:=Excel.XlYesNoGuess.xlYes)
                 End With
 
                 wbExcel.Save()
@@ -383,20 +398,20 @@ Module modImprimeXML
                 wbExcel.ExportAsFixedFormat(Type:=Excel.XlFixedFormatType.xlTypePDF,
                                              Filename:=FC_RutaModulos & "\ArchivosIncloud\" &
             aemp & "\POLIZAS\" & dCarpetasPol.Item(dCarpetasPol.Keys(t)) &
-            "\relacion\" & dCarpetasPol.Keys(t) & "Pol",
+            "\relacion\" & dCarpetasPol.Keys(t) & "_POL",
                                              Quality:=Excel.XlFixedFormatQuality.xlQualityStandard,
                                              IncludeDocProperties:=True, IgnorePrintAreas:=False,
                                              OpenAfterPublish:=False)
 
-                dDatos = Split(dCarpetasPol.Item(dCarpetasPol.Keys(t)), "\")
+
                 regbit = New clRegistroBitacora
                 strmes = dDatos(1)
                 fecha = CDate("01/" & strmes & "/" & CStr(Year(Date.Now.Date)))
                 mes = Month(fecha)
                 regbit.Periodo = mes
                 regbit.Ejercicio = CInt(dDatos(0))
-                regbit.Archivo = dCarpetasPol.Keys(t) & "Pol.pdf"
-                regbit.Nombrearchivo = GlobalRFCEmpresa & "-POL" & Format(mes, "00") & dDatos(0)
+                regbit.Archivo = dCarpetasPol.Keys(t) & "_POL.pdf"
+                regbit.Nombrearchivo = GlobalRFCEmpresa & "_" & Right(dDatos(0), 2) & Format(mes, "00") & "_POL"
                 clasebit.Regbitacora.Add(regbit)
 
 
@@ -445,8 +460,8 @@ Module modImprimeXML
             shXL = wbXl.ActiveSheet
             With shXL
                 ''ENCABEZADO
-                complementoruta = Year(factu.SFecha) & "\" & UCase(MonthName(Month(factu.SFecha)))
-                compleRelacion = UCase(MonthName(Month(factu.SFecha))) & Year(factu.SFecha)
+                complementoruta = Right(Year(factu.SFecha), 2) & "\" & UCase(Format(Month(factu.SFecha), "00"))
+                compleRelacion = Right(Year(factu.SFecha), 2) & UCase(Format(Month(factu.SFecha), "00"))
                 .Cells(3, iColEnc.iTipo).value = factu.STipo
                 .Cells(3, iColEnc.iFecha).value = "'" & factu.SFecha
                 .Cells(3, iColEnc.iSerie).value = factu.SSerie
@@ -552,7 +567,7 @@ Module modImprimeXML
                                      IncludeDocProperties:=True, IgnorePrintAreas:=True,
                                      OpenAfterPublish:=False)
 
-            AsociacionesXML(factu, cEmpresa, rutaGuarda & "\pdfs\relacion\" & GlobalRFCEmpresa & compleRelacion)
+            AsociacionesXML(factu, cEmpresa, rutaGuarda & "\pdfs\relacion\" & GlobalRFCEmpresa & "_" & compleRelacion)
 
             Celda = Nothing
             wbXl.Close()
@@ -595,8 +610,10 @@ Module modImprimeXML
             f = getLastRow(wsExcel) + 1
 
             With wsExcel
-                If f > 2 Then
-                    x = 2
+                '.Cells(1, 1).value = IIf(tdocum.SRFCEmisor = GlobalRFCEmpresa, Trim(quitarSaltosLinea(tdocum.SNombreEmisor)), Trim(quitarSaltosLinea(tdocum.SNombreReceptor)))
+                '.Cells(2, 1).value = "Relación de Comprobantes"
+                If f > 4 Then
+                    x = 4
                     Do While .Cells(x, 1).value <> ""
                         If .Cells(x, 7).value = tdocum.SUUID.ToString Then
                             f = x
@@ -619,13 +636,13 @@ Module modImprimeXML
                 'Year(tdocum.SFecha) & "/" &
                 'UCase(MonthName(Month(tdocum.SFecha))) & "/pdfs/" & tdocum.SUUID.ToString & ".pdf")
                 .Cells(f, 9) = directContaXMLNUBE & "/COMPROBANTES/" &
-                                                 Year(tdocum.SFecha) & "/" &
-                                                 UCase(MonthName(Month(tdocum.SFecha))) & "/pdfs/" &
+                                                 Right(Year(tdocum.SFecha), 2) & "/" &
+                                                 UCase(Format(Month(tdocum.SFecha), "00")) & "/pdfs/" &
                                                  UCase(tdocum.SUUID.ToString) & ".pdf"
 
                 Dim sRut As String, sKey As String
-                sKey = GlobalRFCEmpresa & UCase(MonthName(Month(tdocum.SFecha))) & Year(tdocum.SFecha)
-                sRut = Year(tdocum.SFecha) & "\" & UCase(MonthName(Month(tdocum.SFecha)))
+                sKey = GlobalRFCEmpresa & "_" & Right(Year(tdocum.SFecha), 2) & UCase(Format(Month(tdocum.SFecha), "00"))
+                sRut = Right(Year(tdocum.SFecha), 2) & "\" & UCase(Format(Month(tdocum.SFecha), "00"))
                 If Not dCarpetas.ContainsKey(sKey) Then
                     dCarpetas.Add(sKey, sRut)
                 End If
@@ -641,15 +658,26 @@ Module modImprimeXML
                 .PageSetup.Zoom = False
                 .PageSetup.FitToPagesTall = 1
                 .PageSetup.FitToPagesWide = 1
-                .PageSetup.PaperSize = Excel.XlPaperSize.xlPaperLetter
+                .PageSetup.RightMargin = 4
+                .PageSetup.LeftMargin = 4
+                .PageSetup.BottomMargin = 4
+                .PageSetup.TopMargin = 9
                 .PageSetup.Orientation = Excel.XlPageOrientation.xlLandscape
 
+                '.PageSetup.Zoom = False
+                '.PageSetup.FitToPagesTall = 1
+                '.PageSetup.FitToPagesWide = 1
+                '.PageSetup.PaperSize = Excel.XlPaperSize.xlPaperLetter
+                '.PageSetup.Orientation = Excel.XlPageOrientation.xlLandscape
+
                 .Cells(f, 8) = linkstring
-                .Columns("A:H").AutoFit
+                .Columns("B:H").AutoFit
                 .Columns("H:I").Hidden = True
+                .Cells(1, 1).value = IIf(tdocum.SRFCEmisor = GlobalRFCEmpresa, Trim(quitarSaltosLinea(tdocum.SNombreEmisor)), Trim(quitarSaltosLinea(tdocum.SNombreReceptor)))
+                .Cells(2, 1).value = "Relación de Comprobantes"
             End With
 
-            If f = 2 Then
+            If f = 5 Then
                 wbExcel.SaveAs(rArchivo & ".xlsx", Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, False, False,
         0, Microsoft.Office.Interop.Excel.XlSaveConflictResolution.xlLocalSessionChanges, Type.Missing, Type.Missing)
             Else
@@ -706,10 +734,10 @@ Module modImprimeXML
                 With shXL
                     .Range("K4:P100").ClearContents()
                     cQue = "SELECT m.Fecha,t.Nombre as Nompol,m.Folio,c.Codigo,m.Referencia,
-                            c.Nombre as nomCuenta,m.TipoMovto,m.Importe,a.UUID,m.Concepto FROM AsocCFDIs a 
+                            c.Nombre as nomCuenta,m.TipoMovto,m.Importe,a.UUID,m.Concepto,m.IdPoliza FROM AsocCFDIs a 
                             INNER JOIN MovimientosPoliza AS m ON a.GuidRef = m.Guid 
                             INNER JOIN TiposPolizas t ON m.TipoPol=t.Codigo 
-                            INNER JOIN Cuentas c ON m.IdCuenta=c.Id WHERE UUID=@uuid ORDER BY m.NumMovto"
+                            INNER JOIN Cuentas c ON m.IdCuenta=c.Id WHERE UUID=@uuid ORDER BY m.Fecha,m.IdPoliza,m.NumMovto"
                     Using mcom = New SqlCommand(cQue, uCon)
                         mcom.Parameters.AddWithValue("@uuid", cUUID)
                         Using mRs = mcom.ExecuteReader()
@@ -843,7 +871,7 @@ Module modImprimeXML
         Dim tImporteTotal, tImporteBase, tImporteIVA, tImporteNoAcred As Double
         Dim complementoruta As String, compleRela As String
         Dim dProveedores As New Dictionary(Of String, String)
-        Dim sArr(0 To 5) As String
+        Dim sArr(0 To 6) As String
 
         If Not System.IO.Directory.Exists(FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\POLIZAS") Then
             Exit Function
@@ -870,6 +898,7 @@ Module modImprimeXML
                         With shXL
                             ''ENCABEZADO DOCUMENTO
                             .Cells(1, 1).value = UCase(claEmpresa.CNomEmpresa)
+                            sArr(6) = UCase(claEmpresa.CNomEmpresa)
                             .Cells(2, 1).value = "Impreso de póliza del " & Mid(FechaI.ToString, 1, 10) & " al " & Mid(FechaF.ToString, 1, 10)
                             .Cells(4, 2).value = IIf(Trim(claEmpresa.CDireccion) <> "", Trim(claEmpresa.CDireccion), "0")
                             .Cells(5, 2).value = IIf(claEmpresa.CRFCEmpresa <> "", Trim(claEmpresa.CRFCEmpresa), "")
@@ -878,15 +907,15 @@ Module modImprimeXML
                             .Cells(4, 19).value = IIf(claEmpresa.CCodigoPostal <> "", Trim(claEmpresa.CCodigoPostal), "0")
 
                             ''ENCABEZADO POLIZA
-                            complementoruta = Year(mCr("Fecha")) & "\" & UCase(MonthName(Month(mCr("Fecha"))))
-                            compleRela = UCase(MonthName(Month(mCr("Fecha")))) & Year(mCr("Fecha"))
+                            complementoruta = Right(Year(mCr("Fecha")), 2) & "\" & UCase(Format(Month(mCr("Fecha")), "00"))
+                            compleRela = Right(Year(mCr("Fecha")), 2) & UCase(Format(Month(mCr("Fecha")), "00"))
                             .Cells(8, 1).value = "'" & IIf(mCr("Fecha").ToString <> "", Mid(mCr("Fecha").ToString, 1, 10), "")
                             sArr(0) = .Cells(8, 1).value ''FECHA
                             .Cells(8, 3).value = IIf(mCr("Nombre") <> "", Trim(mCr("Nombre")), "")
                             sArr(1) = .Cells(8, 3).value ''TIPO
                             .Cells(8, 5).value = IIf(mCr("Folio").ToString <> "", Trim(mCr("Folio").ToString), "")
                             sArr(2) = .Cells(8, 5).value ''FOLIO
-                            .Cells(8, 6).value = IIf(mCr("Concepto") <> "", Trim(mCr("Concepto")), "")
+                            .Cells(8, 6).value = IIf(mCr("Concepto") <> "", Trim(quitarSaltosLinea(mCr("Concepto"))), "")
                             sArr(3) = .Cells(8, 6).value ''CONCEPTO
 
                             ''MOVIMIENTOS DE LA POLIZA
@@ -1164,7 +1193,7 @@ Module modImprimeXML
                                                     .Cells(f, 19).Value = Format(movCr("Total"), "#,##0.00")
                                                     .Cells(f, 19).HorizontalAlignment = Microsoft.Office.Interop.Excel.Constants.xlCenter
                                                     f = f + 1
-                                                    .Cells(f, 13).Value = IIf(claEmpresa.CRFCEmpresa = movCr("RFCEmisor"), movCr("NombreReceptor"), movCr("NombreEmisor"))
+                                                    .Cells(f, 13).Value = IIf(claEmpresa.CRFCEmpresa = movCr("RFCEmisor"), Trim(quitarSaltosLinea(movCr("NombreReceptor"))), Trim(quitarSaltosLinea(movCr("NombreEmisor"))))
 
                                                     'nomfac = FC_RutaModulos & "\ArchivosIncloud\ARCHIVOSXML\" & cEmpresa & "\" & cRs("UUID") & ".xlsx"
                                                     nomfac = GetRutaFile(FC_RutaModulos & "\ArchivosIncloud\" & cEmpresa & "\COMPROBANTES", cRs("UUID") & ".xlsx")
@@ -1268,7 +1297,7 @@ Module modImprimeXML
                             End If
                             CrearPolizaPDF(appXL, nomArchivo & "\" & GuidPoliza & ".pdf")
 
-                            compleRela = nomArchivo & "\relacion\" & GlobalRFCEmpresa & compleRela
+                            compleRela = nomArchivo & "\relacion\" & GlobalRFCEmpresa & "_" & compleRela
                             AsociacionesPolizas(cEmpresa, compleRela, sArr, cElimina)
 
                             shXL = Nothing
@@ -1323,8 +1352,10 @@ Module modImprimeXML
             f = getLastRow(wsExcel) + 1
 
             With wsExcel
-                If f > 2 Then
-                    x = 2
+                '.Cells(1, 1).value = dPol(6)
+                '.Cells(2, 1).value = "Relación de Polizas"
+                If f > 4 Then
+                    x = 4
                     Do While .Cells(x, 1).value <> ""
                         If .Cells(x, 6).value = dPol(5) Then
                             f = x
@@ -1350,13 +1381,13 @@ Module modImprimeXML
                     'Year(tdocum.SFecha) & "/" &
                     'UCase(MonthName(Month(tdocum.SFecha))) & "/pdfs/" & tdocum.SUUID.ToString & ".pdf")
                     .Cells(f, 8) = directContaXMLNUBE & "/POLIZAS/" &
-                                                     Year(dPol(0)) & "/" &
-                                                     UCase(MonthName(Month(dPol(0)))) & "/" &
+                                                     Right(Year(dPol(0)), 2) & "/" &
+                                                     UCase(Format(Month(dPol(0)), "00")) & "/" &
                                                      UCase(dPol(5)) & ".pdf"
 
                     Dim sRut As String, sKey As String
-                    sKey = GlobalRFCEmpresa & UCase(MonthName(Month(dPol(0)))) & Year(dPol(0))
-                    sRut = Year(dPol(0)) & "\" & UCase(MonthName(Month(dPol(0))))
+                    sKey = GlobalRFCEmpresa & "_" & Right(Year(dPol(0)), 2) & UCase(Format(Month(dPol(0)), "00"))
+                    sRut = Right(Year(dPol(0)), 2) & "\" & UCase(Format(Month(dPol(0)), "00"))
                     If Not dCarpetasPol.ContainsKey(sKey) Then
                         dCarpetasPol.Add(sKey, sRut)
                     End If
@@ -1372,15 +1403,26 @@ Module modImprimeXML
                     .PageSetup.Zoom = False
                     .PageSetup.FitToPagesTall = 1
                     .PageSetup.FitToPagesWide = 1
-                    .PageSetup.PaperSize = Excel.XlPaperSize.xlPaperLetter
+                    .PageSetup.RightMargin = 4
+                    .PageSetup.LeftMargin = 4
+                    .PageSetup.BottomMargin = 4
+                    .PageSetup.TopMargin = 9
                     .PageSetup.Orientation = Excel.XlPageOrientation.xlLandscape
+
+                    '.PageSetup.Zoom = False
+                    '.PageSetup.FitToPagesTall = 1
+                    '.PageSetup.FitToPagesWide = 1
+                    '.PageSetup.PaperSize = Excel.XlPaperSize.xlPaperLetter
+                    '.PageSetup.Orientation = Excel.XlPageOrientation.xlLandscape
 
                     .Cells(f, 7) = linkstring
                     .Columns("G:H").AutoFit
+                    .Cells(1, 1).value = dPol(6)
+                    .Cells(2, 1).value = "Relación de Polizas"
                 End If
             End With
 
-            If f = 2 Then
+            If f = 5 Then
                 wbExcel.SaveAs(rArchivo & ".xlsx", Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, False, False,
         0, Microsoft.Office.Interop.Excel.XlSaveConflictResolution.xlLocalSessionChanges, Type.Missing, Type.Missing)
             Else
@@ -1502,7 +1544,7 @@ ErrHandler:
             Dim dDatos() As String = Split(rArchivo, "\")
             Dim sMes As String = dDatos(UBound(dDatos))
             Dim sYear As String = dDatos(UBound(dDatos) - 1)
-            rArchivo = rArchivo & "\pdfs\relacion\" & GlobalRFCEmpresa & sMes & sYear & ".xlsx"
+            rArchivo = rArchivo & "\pdfs\relacion\" & GlobalRFCEmpresa & "_" & sMes & sYear & ".xlsx"
             If Not System.IO.File.Exists(rArchivo) Then
                 Exit Sub
             End If
@@ -1525,8 +1567,8 @@ ErrHandler:
             End With
 
             Dim sRut As String, sKey As String
-            sKey = GlobalRFCEmpresa & UCase(sMes) & sYear
-            sRut = sYear & "\" & UCase(sMes)
+            sKey = GlobalRFCEmpresa & "_" & UCase(sMes) & sYear
+            sRut = UCase(sMes) & "\" & sYear
             If Not dCarpetas.ContainsKey(sKey) Then
                 dCarpetas.Add(sKey, sRut)
             End If

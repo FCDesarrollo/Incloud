@@ -120,7 +120,7 @@ Module modFuncione
             End If
 Otraempresa:
         Next
-        KillAllExcels()
+        'KillAllExcels()
     End Sub
 
 
@@ -533,7 +533,7 @@ Otraempresa:
 Otraempresa:
             dCarpetasPol = Nothing
         Next
-        KillAllExcels()
+        ' KillAllExcels()
     End Sub
 
     Public Function getLastRow(ByRef sht As Excel.Worksheet) As Long
@@ -654,4 +654,8 @@ Err:
             End If
         End If
     End Sub
+
+    Public Function quitarSaltosLinea(ByVal texto As String) As String
+        quitarSaltosLinea = Replace(texto, Chr(10), "")
+    End Function
 End Module

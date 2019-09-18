@@ -42,7 +42,7 @@ Public Class frmProcesar
                     CreaPoliza(cbEmpresas.Text, "POLIZA", "Polizas", False, DTInic.Value.Date, DTFin.Value.Date)
                 End If
                 esBoton = False
-                KillAllExcels()
+                'KillAllExcels()
                 MsgBox("Se ha Procesado Correctamente.", vbInformation, "Validación")
             Else
                 MsgBox("No ha seleccionado ningun proceso.", vbInformation, "Validación")
